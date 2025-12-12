@@ -188,6 +188,47 @@ If the manifest can’t be loaded, the app will still work with local models.
 
 - Long generations are aborted after `chatTimeoutMs` (default 120s). Increase it via `window.OllamaConfig.chatTimeoutMs`.
 
+## Image Attachments
+
+The app supports attaching images to your messages for multimodal models.
+
+### How to attach images
+
+1. Click the **📎** (attachment) button in the message composer
+2. Select one or more image files from your computer
+3. Thumbnail previews appear below the message input
+4. Click on a thumbnail to open the full-size image
+5. Click the **×** button on a thumbnail to remove it before sending
+6. Send your message with the attached images
+
+### Supported formats and limits
+
+- **Supported formats**: JPEG, PNG, GIF, WebP
+- **Maximum file size**: 20 MB per image
+- **Maximum images per message**: 10
+
+### Multimodal model requirement
+
+Image attachments only work with models that support vision/multimodal capabilities. The app will warn you if the selected model may not support images. Recommended models include:
+
+- `llava` and variants (e.g., `llava:13b`)
+- `qwen` models with vision support
+- `minicpm` and `minicpm-v`
+- `mistral-large` (multimodal)
+- Other models with built-in vision support
+
+If you attach images with a non-multimodal model, the images will still be sent with your message, but the model may ignore them.
+
+### How images appear in conversation
+
+- **In the composer**: Thumbnail previews show before you send
+- **In the transcript**: Full images appear inline with both user and assistant messages
+- **Clickable images**: Click any message image to view it in full size in a new window
+
+### Chat history with images
+
+Images are automatically saved with your chat history, so they'll appear in your transcript when you reload the app.
+
 ## Chat History
 
 The app automatically persists your conversation history across browser sessions.
