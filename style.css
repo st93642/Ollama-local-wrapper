@@ -168,6 +168,8 @@ body {
 .message {
     margin-bottom: 1rem;
     display: flex;
+    gap: 0.5rem;
+    align-items: flex-end;
     animation: slideIn 0.3s ease-out;
 }
 
@@ -184,10 +186,42 @@ body {
 
 .message.user {
     justify-content: flex-end;
+    flex-direction: row-reverse;
 }
 
 .message.assistant {
     justify-content: flex-start;
+}
+
+.message.system {
+    justify-content: center;
+}
+
+.message-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex: 0 0 auto;
+    box-shadow: var(--shadow-sm);
+}
+
+.message.user .message-avatar {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.message.assistant .message-avatar {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.message.system .message-avatar {
+    display: none;
 }
 
 .message-content {
@@ -199,16 +233,61 @@ body {
     font-size: 0.95rem;
 }
 
+.message-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    margin-bottom: 0.25rem;
+    font-size: 0.75rem;
+}
+
+.message-label {
+    font-weight: 600;
+}
+
+.message-model {
+    font-weight: 500;
+    opacity: 0.85;
+}
+
+.message-timestamp {
+    margin-left: auto;
+    opacity: 0.8;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.message-text {
+    white-space: pre-wrap;
+}
+
 .message.user .message-content {
     background-color: var(--primary-color);
     color: #fff;
     border-bottom-right-radius: 0.25rem;
 }
 
+.message.user .message-meta {
+    color: rgba(255, 255, 255, 0.85);
+}
+
 .message.assistant .message-content {
     background-color: #e9ecef;
     color: #212529;
     border-bottom-left-radius: 0.25rem;
+}
+
+.message.assistant .message-meta {
+    color: rgba(33, 37, 41, 0.7);
+}
+
+.message.system .message-content {
+    max-width: 100%;
+    padding: 0.25rem 0.5rem;
+    background: transparent;
+    color: var(--secondary-color);
+    font-size: 0.85rem;
+    text-align: center;
 }
 
 /* Message Composer */

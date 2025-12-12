@@ -14,7 +14,6 @@ const DefaultOllamaConfig = {
     defaultModel: 'llama2',
     defaultTemperature: 0.7,
     defaultMaxTokens: 512,
-    conversationHistory: [],
 
     // Method to update config from manifest or external source
     loadFromManifest(manifestData) {
@@ -54,7 +53,8 @@ const AppState = {
     maxTokens: window.OllamaConfig.defaultMaxTokens,
     isLoading: false,
     isRefreshingModels: false,
-    conversationHistory: [],
+
+    messages: [],
 
     availableModels: [],
 };
@@ -94,6 +94,11 @@ function normalizeBaseUrl(baseUrl) {
 
 function buildOllamaUrl(pathname) {
     const base = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
+    return new URL(pathname, base + '/').toString();
+}
+
+function buildOllamaUrlForBase(baseUrl, pathname) {
+    const base = normalizeBaseUrl(baseUrl);
     return new URL(pathname, base + '/').toString();
 }
 
@@ -498,26 +503,32 @@ function setupEventListeners() {
  * Handle model selection change
  */
 function handleModelChange(modelName) {
+    const previousModel = AppState.currentModel;
+
     if (!modelName) {
         AppState.currentModel = null;
         setModelMeta(null);
         updateStatus('No model selected', 'warning');
+        updateTranscriptPlaceholder();
         return;
     }
 
     const model = getModelByName(modelName);
 
     AppState.currentModel = modelName;
-    AppState.conversationHistory = [];
-    clearChatTranscript();
-
     setModelMeta(model);
 
     const metaBits = [];
     if (model && model.sources?.includes('local')) metaBits.push('local');
     if (model && model.sources?.includes('cloud')) metaBits.push('cloud');
 
-    updateStatus(`Model changed to: ${modelName}${metaBits.length ? ` (${metaBits.join(' + ')})` : ''}`, 'success');
+    updateStatus(`Using model: ${modelName}${metaBits.length ? ` (${metaBits.join(' + ')})` : ''}`, 'success');
+
+    if (previousModel && previousModel !== modelName && AppState.messages.length > 0) {
+        appendMessage('system', `Switched to model: ${modelName}`, modelName);
+    }
+
+    updateTranscriptPlaceholder();
 
     console.log('Model selected:', modelName);
     console.log('Current configuration:', window.OllamaConfig.getConfig());
@@ -526,8 +537,10 @@ function handleModelChange(modelName) {
 /**
  * Handle message form submission
  */
-function handleMessageSubmit(e) {
+async function handleMessageSubmit(e) {
     e.preventDefault();
+
+    if (AppState.isLoading) return;
 
     if (!AppState.currentModel) {
         updateStatus('Please select a model first', 'warning');
@@ -541,28 +554,43 @@ function handleMessageSubmit(e) {
         return;
     }
 
-    // Add user message to transcript
-    addMessageToTranscript(message, 'user');
+    const modelAtSend = AppState.currentModel;
+    const temperatureAtSend = AppState.temperature;
+    const maxTokensAtSend = AppState.maxTokens;
 
-    // Clear input
+    appendMessage('user', message, modelAtSend);
+
     DOMElements.messageInput.value = '';
-    if (DOMElements.messageInput) {
-        DOMElements.messageInput.style.height = 'auto';
-    }
+    DOMElements.messageInput.style.height = 'auto';
 
-    // Simulate API call and response (placeholder)
+    setErrorBanner(null);
     setLoadingState(true);
-    updateStatus('Generating response...', 'loading');
+    updateStatus(`Generating response with ${modelAtSend}...`, 'loading');
 
-    // Simulate async operation
-    setTimeout(() => {
-        const response = `This is a placeholder response from ${AppState.currentModel}. ` +
-            `Temperature: ${AppState.temperature}, Max Tokens: ${AppState.maxTokens}`;
-        addMessageToTranscript(response, 'assistant');
-        setLoadingState(false);
+    try {
+        const result = await requestOllamaChat({
+            modelName: modelAtSend,
+            temperature: temperatureAtSend,
+            maxTokens: maxTokensAtSend,
+        });
+
+        appendMessage('assistant', result.content, modelAtSend);
+
+        if (typeof result.tokenCount === 'number') {
+            updateTokenCount(result.tokenCount);
+        } else {
+            updateTokenCount(result.content.split(/\s+/).filter(Boolean).length);
+        }
+
         updateStatus('Ready', 'success');
-        updateTokenCount(response.split(' ').length);
-    }, 1000);
+    } catch (err) {
+        console.error('Failed to generate response:', err);
+        setErrorBanner(err?.message || 'Failed to generate response. Please try again.', 'danger');
+        appendMessage('assistant', `Error: ${err?.message || 'Failed to generate response'}`, modelAtSend);
+        updateStatus('Failed to generate response', 'error');
+    } finally {
+        setLoadingState(false);
+    }
 }
 
 /**
@@ -571,7 +599,12 @@ function handleMessageSubmit(e) {
 function handleMessageInputKeydown(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        DOMElements.messageForm.dispatchEvent(new Event('submit'));
+
+        if (typeof DOMElements.messageForm?.requestSubmit === 'function') {
+            DOMElements.messageForm.requestSubmit();
+        } else {
+            DOMElements.messageForm.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
     }
 }
 
@@ -585,49 +618,164 @@ function autoExpandTextarea(e) {
 }
 
 /**
- * Add message to chat transcript
+ * Chat transcript + in-memory conversation handling
  */
-function addMessageToTranscript(text, sender) {
+function formatTimestamp(isoString) {
+    try {
+        return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+        return '';
+    }
+}
+
+function updateTranscriptPlaceholder() {
+    if (!DOMElements.chatTranscript) return;
+    if (AppState.messages.length > 0) return;
+
+    DOMElements.chatTranscript.innerHTML = '';
+
+    const placeholder = document.createElement('div');
+    placeholder.className = 'placeholder-content text-center text-muted';
+
+    const p = document.createElement('p');
+    p.textContent = AppState.currentModel
+        ? `Chatting with ${AppState.currentModel}. Send a message to begin.`
+        : 'Select a model to start chatting';
+
+    placeholder.appendChild(p);
+    DOMElements.chatTranscript.appendChild(placeholder);
+}
+
+function renderMessageToTranscript(message) {
     if (!DOMElements.chatTranscript) return;
 
-    // Clear placeholder if it exists
     const placeholder = DOMElements.chatTranscript.querySelector('.placeholder-content');
-    if (placeholder) {
-        placeholder.remove();
-    }
+    if (placeholder) placeholder.remove();
+
+    const roleClass = message.role === 'assistant' ? 'assistant' : message.role === 'user' ? 'user' : 'system';
 
     const messageDiv = document.createElement('div');
-    messageDiv.className = `message ${sender}`;
+    messageDiv.className = `message ${roleClass}`;
+
+    if (roleClass === 'system') {
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'message-content';
+        contentDiv.textContent = message.content;
+        messageDiv.appendChild(contentDiv);
+        DOMElements.chatTranscript.appendChild(messageDiv);
+        scrollChatToBottom();
+        return;
+    }
+
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'message-avatar';
+    avatarDiv.textContent = message.role === 'user' ? 'U' : 'A';
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.textContent = text;
 
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'message-meta';
+
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'message-label';
+    labelSpan.textContent = message.role === 'user' ? 'You' : 'Assistant';
+    metaDiv.appendChild(labelSpan);
+
+    if (message.role === 'assistant' && message.model) {
+        const modelSpan = document.createElement('span');
+        modelSpan.className = 'message-model';
+        modelSpan.textContent = message.model;
+        metaDiv.appendChild(modelSpan);
+    }
+
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'message-timestamp';
+    timeSpan.textContent = formatTimestamp(message.timestamp);
+    metaDiv.appendChild(timeSpan);
+
+    const textDiv = document.createElement('div');
+    textDiv.className = 'message-text';
+    textDiv.textContent = message.content;
+
+    contentDiv.appendChild(metaDiv);
+    contentDiv.appendChild(textDiv);
+
+    messageDiv.appendChild(avatarDiv);
     messageDiv.appendChild(contentDiv);
+
     DOMElements.chatTranscript.appendChild(messageDiv);
-
-    // Scroll to bottom
     scrollChatToBottom();
-
-    // Store in history
-    AppState.conversationHistory.push({
-        sender,
-        text,
-        timestamp: new Date().toISOString(),
-    });
 }
 
-/**
- * Clear chat transcript
- */
+function appendMessage(role, content, model = null) {
+    const message = {
+        role,
+        content,
+        timestamp: new Date().toISOString(),
+        model: model || null,
+    };
+
+    AppState.messages.push(message);
+    renderMessageToTranscript(message);
+
+    return message;
+}
+
 function clearChatTranscript() {
     if (!DOMElements.chatTranscript) return;
 
-    DOMElements.chatTranscript.innerHTML = `
-        <div class="placeholder-content text-center text-muted">
-            <p>Conversation started. Send a message to begin.</p>
-        </div>
-    `;
+    AppState.messages = [];
+    updateTranscriptPlaceholder();
+}
+
+function getConversationContextForRequest() {
+    return AppState.messages
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({ role: m.role, content: m.content }));
+}
+
+function getRequestBaseUrlForModel(modelName) {
+    const model = getModelByName(modelName);
+    const explicitEndpoint = String(model?.endpoint || '').trim();
+    return explicitEndpoint || window.OllamaConfig.apiEndpoint;
+}
+
+async function requestOllamaChat({ modelName, temperature, maxTokens }) {
+    const url = buildOllamaUrlForBase(getRequestBaseUrlForModel(modelName), '/api/chat');
+
+    const payload = {
+        model: modelName,
+        messages: getConversationContextForRequest(),
+        stream: false,
+        options: {
+            temperature,
+            num_predict: maxTokens,
+        },
+    };
+
+    const data = await fetchJsonWithRetry(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+        retries: 0,
+        timeoutMs: typeof window.OllamaConfig.chatTimeoutMs === 'number' ? window.OllamaConfig.chatTimeoutMs : 120_000,
+    });
+
+    const content = data?.message?.content ?? data?.response;
+
+    if (typeof content !== 'string') {
+        throw new Error('Unexpected response from Ollama.');
+    }
+
+    const tokenCount =
+        typeof data?.eval_count === 'number'
+            ? data.eval_count + (typeof data?.prompt_eval_count === 'number' ? data.prompt_eval_count : 0)
+            : undefined;
+
+    return { content, tokenCount };
 }
 
 /**
@@ -719,7 +867,7 @@ if (document.readyState === 'loading') {
 // Export for testing or external use
 window.AppState = AppState;
 window.OllamaApp = {
-    addMessage: addMessageToTranscript,
+    addMessage: appendMessage,
     clearChat: clearChatTranscript,
     setStatus: updateStatus,
     setModel: handleModelChange,
