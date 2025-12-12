@@ -1548,7 +1548,6 @@ function handleModelChange(modelName) {
         setModelMeta(null);
         updateStatus('No model selected', 'warning');
         updateTranscriptPlaceholder();
-        renderInstalledModels();
         return;
     }
 
@@ -1568,7 +1567,6 @@ function handleModelChange(modelName) {
     }
 
     updateTranscriptPlaceholder();
-    renderInstalledModels();
 
     console.log('Model selected:', modelName);
     console.log('Current configuration:', window.OllamaConfig.getConfig());
@@ -1668,6 +1666,14 @@ async function handleMessageSubmit(e) {
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
             historyStorage.save(AppState.messages);
             updateStatus('Failed to connect', 'error');
+            clearPendingImages();
+        } else if (errorMessage.toLowerCase().includes('premium model request limit')) {
+            const displayMessage = 'Premium model request limit reached. Please try a different model or wait before using this model again.';
+            setErrorBanner(displayMessage, 'warning');
+            AppState.messages[assistantMessageIndex].content = `[${displayMessage}]`;
+            updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            historyStorage.save(AppState.messages);
+            updateStatus('Premium model limit reached', 'warning');
             clearPendingImages();
         } else {
             setErrorBanner(errorMessage, 'danger');
@@ -1851,7 +1857,7 @@ function handleClearChat() {
 
 function getConversationContextForRequest() {
     return AppState.messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim().length > 0)
         .map((m) => {
             const messageObj = { role: m.role, content: m.content };
             if (m.images && m.images.length > 0) {
@@ -1885,8 +1891,14 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
     const controller = AppState.abortController || new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), chatTimeoutMs);
 
+    console.log('[requestOllamaChat] Starting request to:', url);
+    console.log('[requestOllamaChat] Model:', modelName);
+    console.log('[requestOllamaChat] Payload:', JSON.stringify(payload, null, 2));
+
+    let response;
     try {
-        const response = await fetch(url, {
+        console.log('[requestOllamaChat] Initiating fetch...');
+        response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -1895,8 +1907,20 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
             signal: controller.signal,
         });
 
+        console.log('[requestOllamaChat] Response received, status:', response.status);
+
         if (!response.ok) {
-            throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+            // Try to get error details from response body
+            let errorMessage = `Request failed: ${response.status} ${response.statusText}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // Ignore JSON parse errors, use default message
+            }
+            throw new Error(errorMessage);
         }
 
         if (!response.body) {
@@ -1948,11 +1972,23 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
             throw new Error('No response content received from Ollama.');
         }
 
+        console.log('[requestOllamaChat] Stream complete, content length:', accumulatedContent.length);
         return { content: accumulatedContent, tokenCount: totalTokens || undefined };
     } catch (err) {
+        console.error('[requestOllamaChat] Error occurred:', err);
+        console.error('[requestOllamaChat] Error name:', err.name);
+        console.error('[requestOllamaChat] Error message:', err.message);
+        console.error('[requestOllamaChat] Error stack:', err.stack);
+        
         if (err.name === 'AbortError') {
-            throw new Error('Request cancelled');
+            throw new Error('Request cancelled or timed out');
         }
+        
+        // Check for network errors
+        if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
+            throw new Error('Failed to connect to Ollama. Please ensure Ollama is running with CORS enabled: OLLAMA_ORIGINS=* ollama serve');
+        }
+        
         throw err;
     } finally {
         clearTimeout(timeoutId);
@@ -1991,7 +2027,9 @@ function setStreamingState(isStreaming) {
     if (DOMElements.stopButton) {
         DOMElements.stopButton.style.display = isStreaming ? 'block' : 'none';
     }
-    renderInstalledModels();
+    if (DOMElements.messageInput) {
+        DOMElements.messageInput.disabled = isStreaming || AppState.isLoading;
+    }
 }
 
 /**
@@ -2018,12 +2056,9 @@ function setLoadingState(isLoading) {
     AppState.isLoading = isLoading;
     if (DOMElements.sendButton) {
         DOMElements.sendButton.disabled = isLoading;
-        if (!AppState.isStreaming) {
-            DOMElements.sendButton.textContent = isLoading ? 'Sending...' : 'Send';
-        }
     }
     if (DOMElements.messageInput) {
-        DOMElements.messageInput.disabled = isLoading;
+        DOMElements.messageInput.disabled = isLoading || AppState.isStreaming;
     }
 }
 
@@ -2053,6 +2088,8 @@ function updateTokenCount(count) {
  */
 function initializeApp() {
     console.log('Initializing Ollama Wrapper SPA...');
+    console.log('Protocol:', window.location.protocol);
+    console.log('Ollama API endpoint:', window.OllamaConfig.apiEndpoint || DefaultOllamaConfig.apiEndpoint);
 
     // Initialize theme
     themeManager.initialize();
@@ -2081,8 +2118,16 @@ function initializeApp() {
         console.log(`Loaded ${savedMessages.length} messages from chat history`);
     }
 
+    // Ensure clean initial state
+    setLoadingState(false);
+    setStreamingState(false);
+    AppState.abortController = null;
+
     // Set initial status
     updateStatus('Ready', 'success');
+
+    // Test Ollama connectivity
+    testOllamaConnection();
 
     // Load available model sources
     refreshModels({ preserveSelection: false });
@@ -2090,6 +2135,39 @@ function initializeApp() {
     // Log configuration
     console.log('Configuration loaded:', window.OllamaConfig.getConfig());
     console.log('Application initialized successfully');
+}
+
+/**
+ * Test Ollama API connectivity
+ */
+async function testOllamaConnection() {
+    try {
+        console.log('[testOllamaConnection] Testing connection to Ollama...');
+        const url = buildOllamaUrl('/api/version');
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        
+        const response = await fetch(url, { 
+            method: 'GET',
+            signal: controller.signal 
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('[testOllamaConnection] ✓ Connected to Ollama:', data);
+            return true;
+        } else {
+            console.warn('[testOllamaConnection] ✗ Ollama responded with status:', response.status);
+            return false;
+        }
+    } catch (err) {
+        console.error('[testOllamaConnection] ✗ Failed to connect to Ollama:', err.message);
+        console.error('[testOllamaConnection] Make sure Ollama is running: ollama serve');
+        console.error('[testOllamaConnection] And CORS is enabled: OLLAMA_ORIGINS=* ollama serve');
+        return false;
+    }
 }
 
 /**
@@ -2113,7 +2191,6 @@ window.OllamaApp = {
     setModel: handleModelChange,
     refreshModels,
     pullModel,
-    deleteModel,
     setTheme: (theme) => {
         if (theme === 'light' || theme === 'dark') {
             themeManager.applyTheme(theme);
