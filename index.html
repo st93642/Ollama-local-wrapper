@@ -63,6 +63,27 @@
                                 </div>
                             </div>
 
+                            <div class="installed-models">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Installed models</h5>
+                                    <span id="installedModelsCountText" class="small text-muted"></span>
+                                </div>
+
+                                <div id="installedModelsWarning" class="alert alert-warning py-1 px-2 small d-none mb-2" role="alert">
+                                    Stop generation to delete models.
+                                </div>
+
+                                <div class="installed-models-list-wrapper">
+                                    <ul id="installedModelsList" class="list-group list-group-flush installed-models-list">
+                                        <li class="list-group-item text-muted small">Loading installed models...</li>
+                                    </ul>
+                                </div>
+
+                                <div class="small text-muted mt-2 installed-models-help">
+                                    Deleting a model removes its local files from your Ollama instance.
+                                </div>
+                            </div>
+
                             <div class="model-library">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5 class="mb-0">Model library</h5>

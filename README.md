@@ -192,6 +192,24 @@ The app is lenient about the feed shape. It accepts either:
 
 Each entry should have at least a `name` field, and can optionally include `description`, `tags`, `family`, and `parameter_size`.
 
+## Installed models + deleting models
+
+The sidebar includes an **Installed models** panel that lists your local models as reported by Ollama (`GET /api/tags`).
+
+- The currently selected model is labeled **Active**.
+- Each installed model has a 🗑 delete action.
+
+### Safe removal workflow
+
+1. **Stop generation first**
+   - If a response is currently streaming, click **Stop**.
+   - Model deletion is blocked while streaming to avoid breaking an active chat.
+2. In **Installed models**, click 🗑 next to the model and confirm the prompt.
+
+Under the hood, the app calls `DELETE /api/delete` (falling back to `POST /api/delete` on older Ollama builds), then refreshes the model list automatically.
+
+If you delete the currently selected model, the app will clear the active model selection and you’ll need to choose another model before sending the next message.
+
 ## Troubleshooting
 
 ### “No models found”
