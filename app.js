@@ -159,6 +159,7 @@ const AppState = {
     libraryCatalogModels: [],
     librarySearchQuery: '',
     activeModelPulls: {},
+    activeModelDeletes: {},
 
     // For cancelling streaming requests
     abortController: null,
@@ -252,6 +253,10 @@ const DOMElements = {
     modelProvenance: null,
     modelDescription: null,
     errorBanner: null,
+
+    installedModelsList: null,
+    installedModelsWarning: null,
+    installedModelsCountText: null,
 
     temperatureSlider: null,
     temperatureValue: null,
@@ -825,6 +830,151 @@ function renderLibraryTable() {
     setLibraryCountText(`${modelsToShow.length} model${modelsToShow.length === 1 ? '' : 's'} available${suffix}`);
 }
 
+function getInstalledModelDeleteKey(modelName) {
+    return normalizeModelName(modelName);
+}
+
+function getInstalledModelDeleteState(modelName) {
+    const key = getInstalledModelDeleteKey(modelName);
+    return AppState.activeModelDeletes[key] || null;
+}
+
+function setInstalledModelDeleteState(modelName, patch) {
+    const key = getInstalledModelDeleteKey(modelName);
+    const existing = AppState.activeModelDeletes[key] || { modelName };
+    AppState.activeModelDeletes[key] = {
+        ...existing,
+        ...patch,
+    };
+}
+
+function clearInstalledModelDeleteState(modelName) {
+    const key = getInstalledModelDeleteKey(modelName);
+    delete AppState.activeModelDeletes[key];
+}
+
+function updateInstalledModelRowFromDeleteState(modelName) {
+    if (!DOMElements.installedModelsList) return;
+
+    const key = getInstalledModelDeleteKey(modelName);
+    const row = DOMElements.installedModelsList.querySelector(`[data-model-key="${key}"]`);
+    if (!row) return;
+
+    const deleteButton = row.querySelector('button[data-action="delete-model"]');
+    const spinner = row.querySelector('[data-role="delete-spinner"]');
+    const statusText = row.querySelector('[data-role="delete-status-text"]');
+
+    const state = getInstalledModelDeleteState(modelName);
+    const phase = state?.phase || 'idle';
+    const message = state?.message || '';
+
+    if (deleteButton) {
+        deleteButton.disabled = AppState.isStreaming || Boolean(AppState.abortController) || phase === 'deleting';
+    }
+
+    if (spinner) {
+        spinner.classList.toggle('d-none', phase !== 'deleting');
+    }
+
+    if (statusText) {
+        statusText.textContent = message;
+        statusText.classList.remove('text-danger', 'text-success');
+        if (phase === 'error') statusText.classList.add('text-danger');
+        if (phase === 'done') statusText.classList.add('text-success');
+    }
+}
+
+function renderInstalledModels() {
+    if (!DOMElements.installedModelsList) return;
+
+    const isChatBusy = AppState.isStreaming || Boolean(AppState.abortController);
+
+    if (DOMElements.installedModelsWarning) {
+        DOMElements.installedModelsWarning.classList.toggle('d-none', !isChatBusy);
+    }
+
+    const localModels = (AppState.availableModels || [])
+        .filter((m) => Array.isArray(m.sources) && m.sources.includes('local'))
+        .slice()
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (DOMElements.installedModelsCountText) {
+        DOMElements.installedModelsCountText.textContent = localModels.length
+            ? `${localModels.length}`
+            : '';
+    }
+
+    DOMElements.installedModelsList.innerHTML = '';
+
+    if (localModels.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'list-group-item text-muted small';
+        empty.textContent = 'No installed models found.';
+        DOMElements.installedModelsList.appendChild(empty);
+        return;
+    }
+
+    for (const model of localModels) {
+        const item = document.createElement('li');
+        item.className = 'list-group-item';
+        item.dataset.modelKey = getInstalledModelDeleteKey(model.name);
+
+        const left = document.createElement('div');
+        left.className = 'flex-grow-1';
+
+        const header = document.createElement('div');
+        header.className = 'd-flex flex-wrap align-items-center gap-2';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'installed-model-name';
+        nameSpan.textContent = model.name;
+        header.appendChild(nameSpan);
+
+        const isActive = normalizeModelName(AppState.currentModel) === normalizeModelName(model.name);
+        if (isActive) {
+            item.classList.add('installed-model-row-active');
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-success';
+            badge.textContent = 'Active';
+            header.appendChild(badge);
+        }
+
+        left.appendChild(header);
+
+        if (model.description) {
+            const description = document.createElement('div');
+            description.className = 'installed-model-description small text-muted';
+            description.textContent = model.description;
+            left.appendChild(description);
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'installed-model-actions';
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'btn btn-outline-danger btn-sm';
+        deleteButton.dataset.action = 'delete-model';
+        deleteButton.dataset.modelName = model.name;
+        deleteButton.title = `Delete ${model.name}`;
+        deleteButton.setAttribute('aria-label', `Delete ${model.name}`);
+        deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm d-none" data-role="delete-spinner" role="status" aria-hidden="true"></span><span class="ms-1">🗑</span>';
+
+        const status = document.createElement('div');
+        status.className = 'small text-muted';
+        status.dataset.role = 'delete-status-text';
+
+        actions.appendChild(deleteButton);
+        actions.appendChild(status);
+
+        item.appendChild(left);
+        item.appendChild(actions);
+        DOMElements.installedModelsList.appendChild(item);
+
+        updateInstalledModelRowFromDeleteState(model.name);
+    }
+}
+
 function renderModelSelect(models, { preserveSelection = true } = {}) {
     if (!DOMElements.modelSelect) return;
 
@@ -897,6 +1047,13 @@ async function refreshModels({ preserveSelection = true } = {}) {
     setLibraryTableMessage('Loading library...');
     setLibraryCountText('');
 
+    if (DOMElements.installedModelsList) {
+        DOMElements.installedModelsList.innerHTML = '<li class="list-group-item text-muted small">Loading installed models...</li>';
+    }
+    if (DOMElements.installedModelsCountText) {
+        DOMElements.installedModelsCountText.textContent = '';
+    }
+
     try {
         const cloudPromise = fetchCloudModelsFromManifest().catch((err) => {
             console.warn('Failed to load cloud models manifest:', err);
@@ -923,6 +1080,7 @@ async function refreshModels({ preserveSelection = true } = {}) {
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection });
         renderLibraryTable();
+        renderInstalledModels();
 
         if (AppState.availableModels.length === 0) {
             updateStatus('No models available', 'warning');
@@ -937,6 +1095,7 @@ async function refreshModels({ preserveSelection = true } = {}) {
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection: false });
         renderLibraryTable();
+        renderInstalledModels();
         updateStatus('Failed to load models', 'error');
     } finally {
         setRefreshModelsButtonLoading(false);
@@ -1119,6 +1278,129 @@ async function pullModel(modelName) {
     }
 }
 
+async function readOllamaResponseDetail(response) {
+    if (!response) return '';
+
+    try {
+        const text = await response.text();
+        if (!text) return '';
+
+        try {
+            const data = JSON.parse(text);
+            if (data?.error) return String(data.error);
+            if (data?.message) return String(data.message);
+            if (data?.status) return String(data.status);
+        } catch {
+            // ignore json parse errors
+        }
+
+        return text;
+    } catch {
+        return '';
+    }
+}
+
+async function requestOllamaDeleteModel(modelName, method) {
+    const url = buildOllamaUrl('/api/delete');
+    const payload = JSON.stringify({ name: modelName });
+
+    return fetchWithTimeout(url, {
+        method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: payload,
+        timeoutMs: 60_000,
+    });
+}
+
+async function deleteModel(modelName) {
+    const trimmedName = String(modelName || '').trim();
+    if (!trimmedName) return;
+
+    if (AppState.isStreaming || AppState.abortController) {
+        setErrorBanner('Stop generation before deleting models.', 'warning');
+        updateStatus('Stop generation before deleting models', 'warning');
+        return;
+    }
+
+    const isActiveModel = normalizeModelName(AppState.currentModel) === normalizeModelName(trimmedName);
+
+    const confirmationText = isActiveModel
+        ? `Delete the currently selected model "${trimmedName}"? This will remove it from Ollama and clear your selection.`
+        : `Delete model "${trimmedName}" from your Ollama installation?`;
+
+    const confirmed = window.confirm(`${confirmationText}\n\nThis cannot be undone (you can re-pull later).`);
+    if (!confirmed) {
+        updateStatus('Delete cancelled', 'warning');
+        return;
+    }
+
+    setErrorBanner(null);
+    setInstalledModelDeleteState(trimmedName, { phase: 'deleting', message: 'Deleting...' });
+    updateInstalledModelRowFromDeleteState(trimmedName);
+    updateStatus(`Deleting ${trimmedName}...`, 'loading');
+
+    try {
+        let response;
+        let deleteError = null;
+
+        try {
+            response = await requestOllamaDeleteModel(trimmedName, 'DELETE');
+        } catch (err) {
+            deleteError = err;
+        }
+
+        if (!response || !response.ok) {
+            const statusCode = response?.status;
+            const shouldFallback = !response || statusCode === 404 || statusCode === 405 || statusCode === 501;
+
+            if (!shouldFallback) {
+                const detail = await readOllamaResponseDetail(response);
+                const suffix = detail ? ` - ${detail}` : '';
+                throw new Error(`Delete failed: ${statusCode || 'request error'}${suffix}`);
+            }
+
+            const postResponse = await requestOllamaDeleteModel(trimmedName, 'POST');
+            if (!postResponse.ok) {
+                const detail = await readOllamaResponseDetail(postResponse);
+                const suffix = detail ? ` - ${detail}` : '';
+                throw new Error(`Delete failed: ${postResponse.status} ${postResponse.statusText}${suffix}`);
+            }
+
+            response = postResponse;
+
+            if (deleteError) {
+                console.warn('DELETE /api/delete failed, succeeded with POST:', deleteError);
+            }
+        }
+
+        setInstalledModelDeleteState(trimmedName, { phase: 'done', message: 'Deleted' });
+        updateInstalledModelRowFromDeleteState(trimmedName);
+
+        if (isActiveModel) {
+            AppState.currentModel = null;
+            if (DOMElements.modelSelect) {
+                DOMElements.modelSelect.value = '';
+            }
+            setModelMeta(null);
+            updateTranscriptPlaceholder();
+        }
+
+        await refreshModels({ preserveSelection: true });
+        clearInstalledModelDeleteState(trimmedName);
+        renderInstalledModels();
+
+        updateStatus(`Deleted ${trimmedName}`, 'success');
+    } catch (err) {
+        const message = err?.message || 'Failed to delete model.';
+        setInstalledModelDeleteState(trimmedName, { phase: 'error', message });
+        updateInstalledModelRowFromDeleteState(trimmedName);
+        setErrorBanner(message, 'danger');
+        updateStatus(`Delete failed: ${trimmedName}`, 'error');
+    }
+}
+
 /**
  * Initialize DOM elements references
  */
@@ -1129,6 +1411,10 @@ function initializeDOMElements() {
     DOMElements.modelProvenance = document.getElementById('modelProvenance');
     DOMElements.modelDescription = document.getElementById('modelDescription');
     DOMElements.errorBanner = document.getElementById('errorBanner');
+
+    DOMElements.installedModelsList = document.getElementById('installedModelsList');
+    DOMElements.installedModelsWarning = document.getElementById('installedModelsWarning');
+    DOMElements.installedModelsCountText = document.getElementById('installedModelsCountText');
 
     DOMElements.temperatureSlider = document.getElementById('temperatureSlider');
     DOMElements.temperatureValue = document.getElementById('temperatureValue');
@@ -1360,6 +1646,18 @@ function setupEventListeners() {
         });
     }
 
+    if (DOMElements.installedModelsList) {
+        DOMElements.installedModelsList.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action="delete-model"]');
+            if (!button) return;
+
+            const modelName = button.dataset.modelName;
+            if (!modelName) return;
+
+            deleteModel(modelName);
+        });
+    }
+
     // Temperature Slider
     if (DOMElements.temperatureSlider) {
         DOMElements.temperatureSlider.addEventListener('input', (e) => {
@@ -1433,6 +1731,7 @@ function handleModelChange(modelName) {
         setModelMeta(null);
         updateStatus('No model selected', 'warning');
         updateTranscriptPlaceholder();
+        renderInstalledModels();
         return;
     }
 
@@ -1452,6 +1751,7 @@ function handleModelChange(modelName) {
     }
 
     updateTranscriptPlaceholder();
+    renderInstalledModels();
 
     console.log('Model selected:', modelName);
     console.log('Current configuration:', window.OllamaConfig.getConfig());
@@ -1874,6 +2174,7 @@ function setStreamingState(isStreaming) {
     if (DOMElements.stopButton) {
         DOMElements.stopButton.style.display = isStreaming ? 'block' : 'none';
     }
+    renderInstalledModels();
 }
 
 /**
@@ -1995,6 +2296,7 @@ window.OllamaApp = {
     setModel: handleModelChange,
     refreshModels,
     pullModel,
+    deleteModel,
     setTheme: (theme) => {
         if (theme === 'light' || theme === 'dark') {
             themeManager.applyTheme(theme);
