@@ -62,6 +62,118 @@ const DefaultOllamaConfig = {
         }
     ],
 
+    // Embedded library models (cloud models only from ollama.com/search?c=cloud)
+    embeddedLibraryModels: [
+        {
+            "name": "gemma3:4b-cloud",
+            "description": "The current, most capable model that runs on a single GPU - Cloud 4B variant",
+            "tags": ["vision", "cloud"],
+            "family": "gemma"
+        },
+        {
+            "name": "gemma3:12b-cloud",
+            "description": "The current, most capable model that runs on a single GPU - Cloud 12B variant",
+            "tags": ["vision", "cloud"],
+            "family": "gemma"
+        },
+        {
+            "name": "gemma3:27b-cloud",
+            "description": "The current, most capable model that runs on a single GPU - Cloud 27B variant",
+            "tags": ["vision", "cloud"],
+            "family": "gemma"
+        },
+        {
+            "name": "qwen3-vl",
+            "description": "The most powerful vision-language model in the Qwen model family to date",
+            "tags": ["vision", "tools", "cloud"],
+            "family": "qwen"
+        },
+        {
+            "name": "devstral-2",
+            "description": "123B model that excels at using tools to explore codebases, editing multiple files and power software engineering agents",
+            "tags": ["tools", "cloud", "coding"],
+            "family": "mistral"
+        },
+        {
+            "name": "gpt-oss",
+            "description": "OpenAI's open-weight models designed for powerful reasoning, agentic tasks, and versatile developer use cases",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "gpt"
+        },
+        {
+            "name": "ministral-3",
+            "description": "The Ministral 3 family is designed for edge deployment, capable of running on a wide range of hardware",
+            "tags": ["vision", "tools", "cloud"],
+            "family": "mistral"
+        },
+        {
+            "name": "qwen3-coder",
+            "description": "Alibaba's performant long context models for agentic and coding tasks",
+            "tags": ["tools", "cloud", "coding"],
+            "family": "qwen"
+        },
+        {
+            "name": "glm-4.6",
+            "description": "Advanced agentic, reasoning and coding capabilities",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "glm"
+        },
+        {
+            "name": "deepseek-v3.1",
+            "description": "DeepSeek-V3.1-Terminus is a hybrid model that supports both thinking mode and non-thinking mode",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "deepseek"
+        },
+        {
+            "name": "gemini-3-pro-preview",
+            "description": "Google's most intelligent model with SOTA reasoning and multimodal understanding, and powerful agentic and vibe coding capabilities",
+            "tags": ["vision", "tools", "thinking", "cloud"],
+            "family": "gemini"
+        },
+        {
+            "name": "minimax-m2",
+            "description": "MiniMax M2 is a high-efficiency large language model built for coding and agentic workflows",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "minimax"
+        },
+        {
+            "name": "kimi-k2",
+            "description": "A state-of-the-art mixture-of-experts (MoE) language model with significant improvements in performance",
+            "tags": ["tools", "cloud"],
+            "family": "kimi"
+        },
+        {
+            "name": "cogito-2.1",
+            "description": "The Cogito v2.1 LLMs are instruction tuned generative models. All models are released under MIT license for commercial use",
+            "tags": ["cloud"],
+            "family": "cogito"
+        },
+        {
+            "name": "kimi-k2-thinking",
+            "description": "Kimi K2 Thinking, Moonshot AI's best open-source thinking model",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "kimi"
+        },
+        {
+            "name": "qwen3-next",
+            "description": "The first installment in the Qwen3-Next series with strong performance in terms of both parameter efficiency and inference speed",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "qwen"
+        },
+        {
+            "name": "mistral-large-3",
+            "description": "A general-purpose multimodal mixture-of-experts model for production-grade tasks and enterprise workloads",
+            "tags": ["vision", "tools", "cloud"],
+            "family": "mistral"
+        },
+        {
+            "name": "deepseek-v3.2",
+            "description": "DeepSeek-V3.2, a model that harmonizes high computational efficiency with superior reasoning and agent performance",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "deepseek"
+        }
+    ],
+
     // Method to update config from manifest or external source
     loadFromManifest(manifestData) {
         if (manifestData && typeof manifestData === 'object') {
@@ -211,22 +323,25 @@ class ThemeManager {
     }
 
     updateToggleIcon(theme) {
+        const sunIcon = document.getElementById('sunIcon');
+        const moonIcon = document.getElementById('moonIcon');
+        
+        if (theme === 'dark') {
+            // Show sun icon (switch to light mode)
+            if (sunIcon) sunIcon.classList.remove('d-none');
+            if (moonIcon) moonIcon.classList.add('d-none');
+        } else {
+            // Show moon icon (switch to dark mode)
+            if (sunIcon) sunIcon.classList.add('d-none');
+            if (moonIcon) moonIcon.classList.remove('d-none');
+        }
+
         const toggle = document.getElementById('themeToggle');
         if (!toggle) return;
 
-        const icon = toggle.querySelector('i');
         const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
-        
         toggle.setAttribute('aria-label', label);
         toggle.setAttribute('title', label);
-
-        if (icon) {
-            if (theme === 'dark') {
-                icon.className = 'bi bi-sun';
-            } else {
-                icon.className = 'bi bi-moon-stars';
-            }
-        }
     }
 
     toggle() {
@@ -253,10 +368,6 @@ const DOMElements = {
     modelProvenance: null,
     modelDescription: null,
     errorBanner: null,
-
-    installedModelsList: null,
-    installedModelsWarning: null,
-    installedModelsCountText: null,
 
     temperatureSlider: null,
     temperatureValue: null,
@@ -632,6 +743,13 @@ function mergeLibraryCatalogModels(manifestModels, libraryEndpointModels) {
         }
     };
 
+    // Add embedded library models as default source
+    const embeddedModels = window.OllamaConfig?.embeddedLibraryModels || [];
+    for (const model of embeddedModels) {
+        const normalized = normalizeLibraryCatalogEntry(model) || null;
+        if (normalized) upsert(normalized, 'embedded');
+    }
+
     for (const model of manifestModels || []) {
         const normalized = normalizeLibraryCatalogEntry(model) || null;
         if (normalized) upsert(normalized, 'manifest');
@@ -830,151 +948,6 @@ function renderLibraryTable() {
     setLibraryCountText(`${modelsToShow.length} model${modelsToShow.length === 1 ? '' : 's'} available${suffix}`);
 }
 
-function getInstalledModelDeleteKey(modelName) {
-    return normalizeModelName(modelName);
-}
-
-function getInstalledModelDeleteState(modelName) {
-    const key = getInstalledModelDeleteKey(modelName);
-    return AppState.activeModelDeletes[key] || null;
-}
-
-function setInstalledModelDeleteState(modelName, patch) {
-    const key = getInstalledModelDeleteKey(modelName);
-    const existing = AppState.activeModelDeletes[key] || { modelName };
-    AppState.activeModelDeletes[key] = {
-        ...existing,
-        ...patch,
-    };
-}
-
-function clearInstalledModelDeleteState(modelName) {
-    const key = getInstalledModelDeleteKey(modelName);
-    delete AppState.activeModelDeletes[key];
-}
-
-function updateInstalledModelRowFromDeleteState(modelName) {
-    if (!DOMElements.installedModelsList) return;
-
-    const key = getInstalledModelDeleteKey(modelName);
-    const row = DOMElements.installedModelsList.querySelector(`[data-model-key="${key}"]`);
-    if (!row) return;
-
-    const deleteButton = row.querySelector('button[data-action="delete-model"]');
-    const spinner = row.querySelector('[data-role="delete-spinner"]');
-    const statusText = row.querySelector('[data-role="delete-status-text"]');
-
-    const state = getInstalledModelDeleteState(modelName);
-    const phase = state?.phase || 'idle';
-    const message = state?.message || '';
-
-    if (deleteButton) {
-        deleteButton.disabled = AppState.isStreaming || Boolean(AppState.abortController) || phase === 'deleting';
-    }
-
-    if (spinner) {
-        spinner.classList.toggle('d-none', phase !== 'deleting');
-    }
-
-    if (statusText) {
-        statusText.textContent = message;
-        statusText.classList.remove('text-danger', 'text-success');
-        if (phase === 'error') statusText.classList.add('text-danger');
-        if (phase === 'done') statusText.classList.add('text-success');
-    }
-}
-
-function renderInstalledModels() {
-    if (!DOMElements.installedModelsList) return;
-
-    const isChatBusy = AppState.isStreaming || Boolean(AppState.abortController);
-
-    if (DOMElements.installedModelsWarning) {
-        DOMElements.installedModelsWarning.classList.toggle('d-none', !isChatBusy);
-    }
-
-    const localModels = (AppState.availableModels || [])
-        .filter((m) => Array.isArray(m.sources) && m.sources.includes('local'))
-        .slice()
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-    if (DOMElements.installedModelsCountText) {
-        DOMElements.installedModelsCountText.textContent = localModels.length
-            ? `${localModels.length}`
-            : '';
-    }
-
-    DOMElements.installedModelsList.innerHTML = '';
-
-    if (localModels.length === 0) {
-        const empty = document.createElement('li');
-        empty.className = 'list-group-item text-muted small';
-        empty.textContent = 'No installed models found.';
-        DOMElements.installedModelsList.appendChild(empty);
-        return;
-    }
-
-    for (const model of localModels) {
-        const item = document.createElement('li');
-        item.className = 'list-group-item';
-        item.dataset.modelKey = getInstalledModelDeleteKey(model.name);
-
-        const left = document.createElement('div');
-        left.className = 'flex-grow-1';
-
-        const header = document.createElement('div');
-        header.className = 'd-flex flex-wrap align-items-center gap-2';
-
-        const nameSpan = document.createElement('span');
-        nameSpan.className = 'installed-model-name';
-        nameSpan.textContent = model.name;
-        header.appendChild(nameSpan);
-
-        const isActive = normalizeModelName(AppState.currentModel) === normalizeModelName(model.name);
-        if (isActive) {
-            item.classList.add('installed-model-row-active');
-            const badge = document.createElement('span');
-            badge.className = 'badge bg-success';
-            badge.textContent = 'Active';
-            header.appendChild(badge);
-        }
-
-        left.appendChild(header);
-
-        if (model.description) {
-            const description = document.createElement('div');
-            description.className = 'installed-model-description small text-muted';
-            description.textContent = model.description;
-            left.appendChild(description);
-        }
-
-        const actions = document.createElement('div');
-        actions.className = 'installed-model-actions';
-
-        const deleteButton = document.createElement('button');
-        deleteButton.type = 'button';
-        deleteButton.className = 'btn btn-outline-danger btn-sm';
-        deleteButton.dataset.action = 'delete-model';
-        deleteButton.dataset.modelName = model.name;
-        deleteButton.title = `Delete ${model.name}`;
-        deleteButton.setAttribute('aria-label', `Delete ${model.name}`);
-        deleteButton.innerHTML = '<span class="spinner-border spinner-border-sm d-none" data-role="delete-spinner" role="status" aria-hidden="true"></span><span class="ms-1">🗑</span>';
-
-        const status = document.createElement('div');
-        status.className = 'small text-muted';
-        status.dataset.role = 'delete-status-text';
-
-        actions.appendChild(deleteButton);
-        actions.appendChild(status);
-
-        item.appendChild(left);
-        item.appendChild(actions);
-        DOMElements.installedModelsList.appendChild(item);
-
-        updateInstalledModelRowFromDeleteState(model.name);
-    }
-}
-
 function renderModelSelect(models, { preserveSelection = true } = {}) {
     if (!DOMElements.modelSelect) return;
 
@@ -1047,13 +1020,6 @@ async function refreshModels({ preserveSelection = true } = {}) {
     setLibraryTableMessage('Loading library...');
     setLibraryCountText('');
 
-    if (DOMElements.installedModelsList) {
-        DOMElements.installedModelsList.innerHTML = '<li class="list-group-item text-muted small">Loading installed models...</li>';
-    }
-    if (DOMElements.installedModelsCountText) {
-        DOMElements.installedModelsCountText.textContent = '';
-    }
-
     try {
         const cloudPromise = fetchCloudModelsFromManifest().catch((err) => {
             console.warn('Failed to load cloud models manifest:', err);
@@ -1080,7 +1046,6 @@ async function refreshModels({ preserveSelection = true } = {}) {
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection });
         renderLibraryTable();
-        renderInstalledModels();
 
         if (AppState.availableModels.length === 0) {
             updateStatus('No models available', 'warning');
@@ -1095,7 +1060,6 @@ async function refreshModels({ preserveSelection = true } = {}) {
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection: false });
         renderLibraryTable();
-        renderInstalledModels();
         updateStatus('Failed to load models', 'error');
     } finally {
         setRefreshModelsButtonLoading(false);
@@ -1300,107 +1264,6 @@ async function readOllamaResponseDetail(response) {
     }
 }
 
-async function requestOllamaDeleteModel(modelName, method) {
-    const url = buildOllamaUrl('/api/delete');
-    const payload = JSON.stringify({ name: modelName });
-
-    return fetchWithTimeout(url, {
-        method,
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: payload,
-        timeoutMs: 60_000,
-    });
-}
-
-async function deleteModel(modelName) {
-    const trimmedName = String(modelName || '').trim();
-    if (!trimmedName) return;
-
-    if (AppState.isStreaming || AppState.abortController) {
-        setErrorBanner('Stop generation before deleting models.', 'warning');
-        updateStatus('Stop generation before deleting models', 'warning');
-        return;
-    }
-
-    const isActiveModel = normalizeModelName(AppState.currentModel) === normalizeModelName(trimmedName);
-
-    const confirmationText = isActiveModel
-        ? `Delete the currently selected model "${trimmedName}"? This will remove it from Ollama and clear your selection.`
-        : `Delete model "${trimmedName}" from your Ollama installation?`;
-
-    const confirmed = window.confirm(`${confirmationText}\n\nThis cannot be undone (you can re-pull later).`);
-    if (!confirmed) {
-        updateStatus('Delete cancelled', 'warning');
-        return;
-    }
-
-    setErrorBanner(null);
-    setInstalledModelDeleteState(trimmedName, { phase: 'deleting', message: 'Deleting...' });
-    updateInstalledModelRowFromDeleteState(trimmedName);
-    updateStatus(`Deleting ${trimmedName}...`, 'loading');
-
-    try {
-        let response;
-        let deleteError = null;
-
-        try {
-            response = await requestOllamaDeleteModel(trimmedName, 'DELETE');
-        } catch (err) {
-            deleteError = err;
-        }
-
-        if (!response || !response.ok) {
-            const statusCode = response?.status;
-            const shouldFallback = !response || statusCode === 404 || statusCode === 405 || statusCode === 501;
-
-            if (!shouldFallback) {
-                const detail = await readOllamaResponseDetail(response);
-                const suffix = detail ? ` - ${detail}` : '';
-                throw new Error(`Delete failed: ${statusCode || 'request error'}${suffix}`);
-            }
-
-            const postResponse = await requestOllamaDeleteModel(trimmedName, 'POST');
-            if (!postResponse.ok) {
-                const detail = await readOllamaResponseDetail(postResponse);
-                const suffix = detail ? ` - ${detail}` : '';
-                throw new Error(`Delete failed: ${postResponse.status} ${postResponse.statusText}${suffix}`);
-            }
-
-            response = postResponse;
-
-            if (deleteError) {
-                console.warn('DELETE /api/delete failed, succeeded with POST:', deleteError);
-            }
-        }
-
-        setInstalledModelDeleteState(trimmedName, { phase: 'done', message: 'Deleted' });
-        updateInstalledModelRowFromDeleteState(trimmedName);
-
-        if (isActiveModel) {
-            AppState.currentModel = null;
-            if (DOMElements.modelSelect) {
-                DOMElements.modelSelect.value = '';
-            }
-            setModelMeta(null);
-            updateTranscriptPlaceholder();
-        }
-
-        await refreshModels({ preserveSelection: true });
-        clearInstalledModelDeleteState(trimmedName);
-        renderInstalledModels();
-
-        updateStatus(`Deleted ${trimmedName}`, 'success');
-    } catch (err) {
-        const message = err?.message || 'Failed to delete model.';
-        setInstalledModelDeleteState(trimmedName, { phase: 'error', message });
-        updateInstalledModelRowFromDeleteState(trimmedName);
-        setErrorBanner(message, 'danger');
-        updateStatus(`Delete failed: ${trimmedName}`, 'error');
-    }
-}
-
 /**
  * Initialize DOM elements references
  */
@@ -1411,10 +1274,6 @@ function initializeDOMElements() {
     DOMElements.modelProvenance = document.getElementById('modelProvenance');
     DOMElements.modelDescription = document.getElementById('modelDescription');
     DOMElements.errorBanner = document.getElementById('errorBanner');
-
-    DOMElements.installedModelsList = document.getElementById('installedModelsList');
-    DOMElements.installedModelsWarning = document.getElementById('installedModelsWarning');
-    DOMElements.installedModelsCountText = document.getElementById('installedModelsCountText');
 
     DOMElements.temperatureSlider = document.getElementById('temperatureSlider');
     DOMElements.temperatureValue = document.getElementById('temperatureValue');
@@ -1643,18 +1502,6 @@ function setupEventListeners() {
             if (!modelName) return;
 
             pullModel(modelName);
-        });
-    }
-
-    if (DOMElements.installedModelsList) {
-        DOMElements.installedModelsList.addEventListener('click', (e) => {
-            const button = e.target.closest('button[data-action="delete-model"]');
-            if (!button) return;
-
-            const modelName = button.dataset.modelName;
-            if (!modelName) return;
-
-            deleteModel(modelName);
         });
     }
 
