@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ollama Local Wrapper</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app" class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <nav class="navbar navbar-dark bg-dark">
+                <div class="container-fluid">
+                    <span class="navbar-brand mb-0 h1">
+                        <i class="bi bi-chat-dots"></i> Ollama Wrapper
+                    </span>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="app-main">
+            <div class="container-fluid h-100">
+                <div class="row h-100">
+                    <!-- Sidebar: Model Selector -->
+                    <aside class="col-lg-3 col-md-4 sidebar border-end border-2">
+                        <div class="sidebar-content">
+                            <div class="model-selector">
+                                <h5 class="mb-3">Model</h5>
+                                <select id="modelSelect" class="form-select form-select-sm" aria-label="Select model">
+                                    <option value="" disabled selected>Choose a model...</option>
+                                    <option value="llama2">Llama 2</option>
+                                    <option value="mistral">Mistral</option>
+                                    <option value="neural-chat">Neural Chat</option>
+                                </select>
+                            </div>
+
+                            <div class="mt-4 settings-panel">
+                                <h5 class="mb-3">Settings</h5>
+                                <div class="mb-3">
+                                    <label for="temperatureSlider" class="form-label">Temperature</label>
+                                    <input type="range" class="form-range" id="temperatureSlider" min="0" max="1" step="0.1" value="0.7">
+                                    <small class="text-muted" id="temperatureValue">0.7</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="maxTokensInput" class="form-label">Max Tokens</label>
+                                    <input type="number" class="form-control form-control-sm" id="maxTokensInput" value="512" min="1" max="4096">
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Chat Area -->
+                    <section class="col-lg-9 col-md-8 chat-container d-flex flex-column">
+                        <!-- Chat Transcript -->
+                        <div id="chatTranscript" class="chat-transcript flex-grow-1 p-4">
+                            <div class="placeholder-content text-center text-muted">
+                                <p>Select a model to start chatting</p>
+                            </div>
+                        </div>
+
+                        <!-- Message Composer -->
+                        <div class="message-composer border-top border-2 p-3 bg-light">
+                            <form id="messageForm" class="d-flex gap-2">
+                                <textarea 
+                                    id="messageInput"
+                                    class="form-control"
+                                    placeholder="Type your message..."
+                                    rows="3"
+                                    aria-label="Message input"
+                                ></textarea>
+                                <button 
+                                    type="submit" 
+                                    class="btn btn-primary align-self-end"
+                                    id="sendButton"
+                                    aria-label="Send message"
+                                >
+                                    Send
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Status Bar -->
+                        <footer class="status-bar border-top border-1 px-3 py-2 bg-light small text-muted">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span id="statusText">Ready</span>
+                                <span id="tokenCount" class="badge bg-secondary">0 tokens</span>
+                            </div>
+                        </footer>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- App Script -->
+    <script src="app.js"></script>
+</body>
+</html>
