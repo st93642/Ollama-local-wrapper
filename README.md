@@ -1,262 +1,142 @@
 # Ollama Local Wrapper
 
-A browser-based single-page application (SPA) wrapper for interacting with Ollama models locally.
+A lightweight, browser-based single-page app (SPA) for chatting with [Ollama](https://ollama.com) models running on your machine.
+
+There’s no separate backend server for this project—the app talks directly to the Ollama HTTP API (default: `http://localhost:11434`).
 
 ## Overview
 
-This project provides a user-friendly web interface for chatting with Ollama models running on your local machine. The application features:
+The wrapper provides a user-friendly web interface for:
 
-- **Model Selector**: Choose from available Ollama models
-- **Chat Interface**: Full conversation transcript with message history
-- **Message Composer**: Rich message input with auto-expanding textarea
-- **Settings Panel**: Adjust temperature and max tokens for model responses
-- **Status Bar**: Real-time status and token count information
-- **Responsive Design**: Adapts from two-column (desktop) to single-column (mobile) layout
+- **Local model discovery** via Ollama (`/api/tags`) with a **Refresh** button
+- **Streaming chat responses** (tokens appear as the model generates)
+- **Stop generation** button to cancel an in-progress response
+- **Conversation transcript** with message history
+- **Settings**: temperature + max tokens
+- Optional **“cloud” model entries** loaded from `manifest.json` (useful when pointing some models at a different Ollama-compatible base URL)
 
 ## Project Structure
 
-```
+```text
 .
-├── index.html      # Main HTML structure with semantic markup
-├── style.css       # Responsive styling with CSS variables and flexbox
-├── app.js          # SPA application logic and global config hook
+├── index.html      # Main HTML
+├── style.css       # Styling
+├── app.js          # SPA logic (calls Ollama /api/* endpoints)
+├── manifest.json   # Optional cloud-model list
 └── README.md       # This file
 ```
 
 ## Getting Started
 
-### Prerequisites
+### 1) Install Ollama locally
 
-- A local Ollama installation with one or more models
-- A modern web browser (Chrome, Firefox, Safari, Edge)
-- A simple HTTP server (see serving options below)
+Follow the official instructions at https://ollama.com/download.
 
-### Serving the Application
+Common options:
 
-Choose one of the following methods to serve the static files:
+- **macOS**
+  - Download the macOS app from the link above, or
+  - Install via Homebrew (if you prefer):
+    ```bash
+    brew install ollama
+    ```
 
-#### Option 1: Python Built-in Server (Recommended for Quick Testing)
+- **Linux**
+  ```bash
+  curl -fsSL https://ollama.com/install.sh | sh
+  ```
 
-**Python 3.x:**
-```bash
-cd /path/to/ollama-local-wrapper
-python3 -m http.server 8000
-```
+- **Windows**
+  - Download and run the Windows installer from the link above.
 
-Then open your browser to: `http://localhost:8000`
+After installing, ensure the Ollama server is running and reachable at `http://localhost:11434`.
 
-**Python 2.x:**
-```bash
-cd /path/to/ollama-local-wrapper
-python -m SimpleHTTPServer 8000
-```
-
-#### Option 2: Node.js with http-server
-
-Install globally:
-```bash
-npm install -g http-server
-```
-
-Serve the directory:
-```bash
-cd /path/to/ollama-local-wrapper
-http-server -p 8000
-```
-
-#### Option 3: Node.js with Express
-
-Create a simple `server.js`:
-```javascript
-const express = require('express');
-const path = require('path');
-const app = express();
-
-app.use(express.static(path.join(__dirname, '.')));
-
-app.listen(8000, () => {
-    console.log('Server running at http://localhost:8000');
-});
-```
-
-Install Express:
-```bash
-npm install express
-```
-
-Run the server:
-```bash
-node server.js
-```
-
-#### Option 4: PHP Built-in Server
+Quick check:
 
 ```bash
-cd /path/to/ollama-local-wrapper
-php -S localhost:8000
+curl http://localhost:11434/api/tags
 ```
 
-#### Option 5: Ruby Built-in Server
+### 2) Pull (download) at least one model
+
+In a terminal:
 
 ```bash
-cd /path/to/ollama-local-wrapper
-ruby -run -ehttpd . -p8000
+ollama pull llama3.2
+# or run directly (pulls if needed)
+ollama run llama3.2
 ```
 
-#### Option 6: Using Docker
+Confirm you have models available:
 
-Create a `Dockerfile`:
-```dockerfile
-FROM nginx:latest
-COPY . /usr/share/nginx/html
-EXPOSE 8000
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-Build and run:
 ```bash
-docker build -t ollama-wrapper .
-docker run -p 8000:8000 ollama-wrapper
+ollama list
 ```
 
-### Configuration
+### 3) Open the wrapper
 
-The application uses a global `OllamaConfig` object that can be customized:
+Just open `index.html` in your browser.
 
-```javascript
-// In your browser console or before page load
-window.OllamaConfig.apiEndpoint = 'http://your-ollama-server:11434';
-window.OllamaConfig.defaultModel = 'mistral';
-window.OllamaConfig.defaultTemperature = 0.8;
-window.OllamaConfig.defaultMaxTokens = 2048;
+- If your browser blocks local-file fetches (some configurations do), serve this folder as static files using any simple file server.
+- No backend/API server is needed for this project—only the Ollama server.
 
-// Load from an external manifest
-window.OllamaConfig.loadFromManifest({
-    apiEndpoint: 'http://localhost:11434',
-    defaultModel: 'llama2'
-});
+## Configuration
+
+The app reads configuration from a global `window.OllamaConfig` object.
+
+Defaults (see `app.js`):
+
+- `apiEndpoint`: `http://localhost:11434`
+- `modelManifestUrl`: `manifest.json`
+- `chatTimeoutMs`: (optional) defaults to 120s
+
+Example override (set before `app.js` is loaded, or from the browser console):
+
+```js
+window.OllamaConfig = {
+  apiEndpoint: 'http://localhost:11434',
+  modelManifestUrl: 'manifest.json',
+  defaultModel: 'llama3.2',
+  defaultTemperature: 0.7,
+  defaultMaxTokens: 512,
+  chatTimeoutMs: 120_000,
+};
 ```
 
-## Features
+### Cloud models (`manifest.json`)
 
-### Model Selection
+`manifest.json` can define additional models and an alternate base URL to send requests to (useful for hosted Ollama-compatible endpoints).
 
-The model selector panel on the left sidebar allows you to choose from available Ollama models. The selection is required before sending messages.
+The app will:
 
-### Chat Interface
+- always try to load local models from `apiEndpoint` (`/api/tags`)
+- also try to load optional cloud models from `modelManifestUrl`
 
-- **Transcript Area**: Displays all messages from both user and model
-- **Message History**: Automatically maintained in the application state
-- **Auto-scrolling**: Chat automatically scrolls to the latest message
-
-### Message Composer
-
-- **Multi-line Input**: Textarea expands automatically as you type
-- **Keyboard Shortcuts**:
-  - `Enter`: Send message
-  - `Shift + Enter`: New line
-- **Send Button**: Click to submit messages
-
-### Settings Panel
-
-- **Temperature**: Controls response creativity (0.0 = deterministic, 1.0 = creative)
-- **Max Tokens**: Maximum length of generated responses
-
-### Status Bar
-
-- **Status Indicator**: Shows current application state
-- **Token Counter**: Displays token usage information
-
-## Browser Support
-
-- Chrome/Chromium: ✅ Fully supported
-- Firefox: ✅ Fully supported
-- Safari: ✅ Fully supported
-- Edge: ✅ Fully supported
-- IE11: ❌ Not supported
-
-## Development
-
-### Architecture
-
-The application follows a modular SPA architecture with:
-
-1. **Global Configuration** (`window.OllamaConfig`): Centralized settings
-2. **Application State** (`AppState`): Tracks current UI and model state
-3. **DOM Elements Cache** (`DOMElements`): Efficient element access
-4. **Event Handlers**: Responsive to user interactions
-5. **Message Management**: History tracking and display
-
-### Extending the Application
-
-To add new features or connect to the actual Ollama API:
-
-1. Modify the `handleMessageSubmit` function to make real API calls
-2. Update `window.OllamaConfig` with your API endpoint
-3. Add new UI components to `index.html`
-4. Style them in `style.css` using existing CSS variables
-
-### Testing
-
-Open `index.html` in your browser to test:
-- ✅ Layout renders correctly
-- ✅ All UI elements are visible
-- ✅ No console errors on page load
-- ✅ Model selection works
-- ✅ Message input accepts text
-- ✅ Settings sliders respond to input
-- ✅ Responsive design adapts to window resize
-- ✅ Status bar updates appropriately
-
-## Dependencies
-
-- **Bootstrap 5.3.0**: For responsive grid and utility classes
-- **Semantic HTML5**: For accessible markup
-- **Vanilla JavaScript**: No framework dependencies (ES6+)
-
-## CSS Features
-
-- **CSS Variables**: Easily customizable colors and sizes
-- **Flexbox Layout**: Modern, responsive layout
-- **Mobile-first Design**: Works great on all screen sizes
-- **Dark/Light Support**: Prepared for theme switching
-- **Smooth Animations**: Subtle transitions and effects
-
-## License
-
-See LICENSE file for details.
+If the manifest can’t be loaded, the app will still work with local models.
 
 ## Troubleshooting
 
-### Page shows blank/doesn't load
+### “No models found”
 
-1. Check browser console for JavaScript errors (F12)
-2. Verify all files (`index.html`, `style.css`, `app.js`) are in the same directory
-3. Clear browser cache and do a hard refresh (Ctrl+F5 or Cmd+Shift+R)
+1. Make sure Ollama is running.
+2. Make sure you’ve pulled at least one model:
+   ```bash
+   ollama pull llama3.2
+   ```
+3. Click **Refresh** in the UI.
 
-### Model selector shows no models
+### “Unable to reach Ollama …”
 
-The placeholder options are static. Connect to actual Ollama API to fetch real models.
+- Verify the Ollama server is reachable:
+  ```bash
+  curl http://localhost:11434/api/tags
+  ```
+- If Ollama is on a different machine or port, set `window.OllamaConfig.apiEndpoint` accordingly.
 
-### Messages not sending
+### Streaming stops immediately / request cancelled
 
-1. Select a model first
-2. Check that Ollama is running locally (`http://localhost:11434`)
-3. Open browser console to check for errors
+- Long generations are aborted after `chatTimeoutMs` (default 120s). Increase it via `window.OllamaConfig.chatTimeoutMs`.
 
-### Responsive layout not working
+## License
 
-1. Verify viewport meta tag is present in `<head>`
-2. Check browser zoom level (should be 100%)
-3. Try resizing the window to test responsiveness
-
-## Future Enhancements
-
-- [ ] Real Ollama API integration
-- [ ] Message export/save functionality
-- [ ] Dark mode theme
-- [ ] Model management (pull, delete)
-- [ ] Persistent conversation storage
-- [ ] Markdown rendering for responses
-- [ ] Code syntax highlighting
-- [ ] Multi-conversation tabs
+See [LICENSE](LICENSE).
