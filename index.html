@@ -90,14 +90,25 @@
                                     rows="3"
                                     aria-label="Message input"
                                 ></textarea>
-                                <button 
-                                    type="submit" 
-                                    class="btn btn-primary align-self-end"
-                                    id="sendButton"
-                                    aria-label="Send message"
-                                >
-                                    Send
-                                </button>
+                                <div class="d-flex gap-1 align-self-end">
+                                    <button 
+                                        type="submit" 
+                                        class="btn btn-primary"
+                                        id="sendButton"
+                                        aria-label="Send message"
+                                    >
+                                        Send
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        class="btn btn-danger"
+                                        id="stopButton"
+                                        style="display: none;"
+                                        aria-label="Stop generating"
+                                    >
+                                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Stop
+                                    </button>
+                                </div>
                             </form>
                         </div>
 
