@@ -1,0 +1,19 @@
+{
+  "cloudModels": [
+    {
+      "name": "llama3.1",
+      "description": "Llama 3.1 via a hosted endpoint (example)",
+      "endpoint": "https://example.com/ollama-proxy/v1/chat"
+    },
+    {
+      "name": "mistral",
+      "description": "Mistral via a hosted endpoint (example)",
+      "endpoint": "https://example.com/ollama-proxy/v1/chat"
+    },
+    {
+      "name": "qwen2.5",
+      "description": "Qwen 2.5 via a hosted endpoint (example)",
+      "endpoint": "https://example.com/ollama-proxy/v1/chat"
+    }
+  ]
+}

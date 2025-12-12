@@ -32,13 +32,26 @@
                     <aside class="col-lg-3 col-md-4 sidebar border-end border-2">
                         <div class="sidebar-content">
                             <div class="model-selector">
-                                <h5 class="mb-3">Model</h5>
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Model</h5>
+                                    <button
+                                        id="refreshModelsButton"
+                                        type="button"
+                                        class="btn btn-outline-secondary btn-sm"
+                                        aria-label="Refresh models"
+                                    >
+                                        Refresh
+                                    </button>
+                                </div>
+
                                 <select id="modelSelect" class="form-select form-select-sm" aria-label="Select model">
-                                    <option value="" disabled selected>Choose a model...</option>
-                                    <option value="llama2">Llama 2</option>
-                                    <option value="mistral">Mistral</option>
-                                    <option value="neural-chat">Neural Chat</option>
+                                    <option value="" disabled selected>Loading models...</option>
                                 </select>
+
+                                <div class="model-meta mt-2">
+                                    <div id="modelProvenance" class="d-flex flex-wrap gap-1"></div>
+                                    <div id="modelDescription" class="small text-muted mt-1"></div>
+                                </div>
                             </div>
 
                             <div class="mt-4 settings-panel">
@@ -58,6 +71,8 @@
 
                     <!-- Chat Area -->
                     <section class="col-lg-9 col-md-8 chat-container d-flex flex-column">
+                        <div id="errorBanner" class="alert alert-danger d-none mx-3 mt-3 mb-0" role="alert"></div>
+
                         <!-- Chat Transcript -->
                         <div id="chatTranscript" class="chat-transcript flex-grow-1 p-4">
                             <div class="placeholder-content text-center text-muted">
