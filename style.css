@@ -266,6 +266,24 @@ body {
     font-size: 0.75rem;
 }
 
+/* Status Indicator Classes */
+.status-ready,
+.status-success {
+    color: var(--success-color);
+}
+
+.status-loading {
+    color: var(--primary-color);
+}
+
+.status-warning {
+    color: #fd7e14;
+}
+
+.status-error {
+    color: var(--danger-color);
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
     .app-main .row {
