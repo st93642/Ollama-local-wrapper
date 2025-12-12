@@ -87,16 +87,19 @@ Just open `index.html` in your browser.
 Since this app runs in the browser, Ollama must allow requests from your browser's origin.
 
 **Linux / macOS:**
+
 ```bash
 OLLAMA_ORIGINS="*" ollama serve
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 $env:OLLAMA_ORIGINS="*"; ollama serve
 ```
 
 If running as a system service (Linux systemd), add `Environment="OLLAMA_ORIGINS=*"` to your service override:
+
 ```bash
 systemctl edit ollama.service
 # Add:
