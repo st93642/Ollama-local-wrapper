@@ -90,6 +90,53 @@ window.OllamaConfig = {
 window.OllamaConfig.loadFromManifest = DefaultOllamaConfig.loadFromManifest;
 window.OllamaConfig.getConfig = DefaultOllamaConfig.getConfig;
 
+// History Storage Helper
+class HistoryStorage {
+    constructor() {
+        this.storageKey = 'ollama-chat-history';
+        this.maxMessages = typeof window.OllamaConfig?.maxHistoryMessages === 'number' ? window.OllamaConfig.maxHistoryMessages : 1000;
+        this.historyPath = window.OllamaConfig?.historyPath || null;
+    }
+
+    save(messages) {
+        try {
+            const messagesToSave = messages.slice(-this.maxMessages);
+            const payload = JSON.stringify(messagesToSave);
+            
+            if (this.historyPath) {
+                console.warn('Desktop storage via historyPath not yet implemented in browser context');
+            } else {
+                localStorage.setItem(this.storageKey, payload);
+            }
+        } catch (err) {
+            console.error('Failed to save chat history:', err);
+        }
+    }
+
+    load() {
+        try {
+            const stored = localStorage.getItem(this.storageKey);
+            if (!stored) return [];
+            
+            const messages = JSON.parse(stored);
+            if (!Array.isArray(messages)) return [];
+            
+            return messages;
+        } catch (err) {
+            console.error('Failed to load chat history:', err);
+            return [];
+        }
+    }
+
+    clear() {
+        try {
+            localStorage.removeItem(this.storageKey);
+        } catch (err) {
+            console.error('Failed to clear chat history:', err);
+        }
+    }
+}
+
 // Application State
 const AppState = {
     currentModel: null,
@@ -106,6 +153,9 @@ const AppState = {
     // For cancelling streaming requests
     abortController: null,
 };
+
+// Initialize History Storage
+const historyStorage = new HistoryStorage();
 
 // Theme Manager
 class ThemeManager {
@@ -201,6 +251,7 @@ const DOMElements = {
     messageInput: null,
     sendButton: null,
     stopButton: null,
+    clearChatButton: null,
     statusText: null,
     tokenCount: null,
 };
@@ -569,6 +620,7 @@ function initializeDOMElements() {
     DOMElements.messageInput = document.getElementById('messageInput');
     DOMElements.sendButton = document.getElementById('sendButton');
     DOMElements.stopButton = document.getElementById('stopButton');
+    DOMElements.clearChatButton = document.getElementById('clearChatButton');
     DOMElements.statusText = document.getElementById('statusText');
     DOMElements.tokenCount = document.getElementById('tokenCount');
 }
@@ -634,6 +686,11 @@ function setupEventListeners() {
     // Stop Button
     if (DOMElements.stopButton) {
         DOMElements.stopButton.addEventListener('click', handleStopStreaming);
+    }
+
+    // Clear Chat Button
+    if (DOMElements.clearChatButton) {
+        DOMElements.clearChatButton.addEventListener('click', handleClearChat);
     }
 
     // Message Input - Auto-expand textarea
@@ -732,6 +789,7 @@ async function handleMessageSubmit(e) {
 
         AppState.messages[assistantMessageIndex].content = result.content;
         updateStreamingMessageInUI(assistantMessageIndex, result.content);
+        historyStorage.save(AppState.messages);
 
         if (typeof result.tokenCount === 'number') {
             updateTokenCount(result.tokenCount);
@@ -748,6 +806,7 @@ async function handleMessageSubmit(e) {
             updateStatus('Response stopped', 'warning');
             AppState.messages[assistantMessageIndex].content += '\n\n[Response stopped by user]';
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            historyStorage.save(AppState.messages);
         } else if (
             (errorMessage.includes('Failed') && errorMessage.includes('0')) ||
             errorMessage.toLowerCase().includes('unable to connect') ||
@@ -761,11 +820,13 @@ async function handleMessageSubmit(e) {
             setErrorBanner(displayMessage, 'danger');
             AppState.messages[assistantMessageIndex].content = `[Error: ${displayMessage}]`;
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            historyStorage.save(AppState.messages);
             updateStatus('Failed to connect', 'error');
         } else {
             setErrorBanner(errorMessage, 'danger');
             AppState.messages[assistantMessageIndex].content = `[Error: ${errorMessage}]`;
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            historyStorage.save(AppState.messages);
             updateStatus('Failed to generate response', 'error');
         }
     } finally {
@@ -900,6 +961,7 @@ function appendMessage(role, content, model = null) {
 
     AppState.messages.push(message);
     renderMessageToTranscript(message);
+    historyStorage.save(AppState.messages);
 
     return message;
 }
@@ -908,7 +970,15 @@ function clearChatTranscript() {
     if (!DOMElements.chatTranscript) return;
 
     AppState.messages = [];
+    historyStorage.clear();
     updateTranscriptPlaceholder();
+}
+
+function handleClearChat() {
+    if (confirm('Are you sure you want to clear all chat history? This cannot be undone.')) {
+        clearChatTranscript();
+        updateStatus('Chat history cleared', 'success');
+    }
 }
 
 function getConversationContextForRequest() {
@@ -1125,6 +1195,17 @@ function initializeApp() {
     // Setup event listeners
     setupEventListeners();
 
+    // Load chat history before rendering placeholder
+    const savedMessages = historyStorage.load();
+    if (Array.isArray(savedMessages) && savedMessages.length > 0) {
+        AppState.messages = savedMessages;
+        // Replay messages to the transcript
+        for (const message of savedMessages) {
+            renderMessageToTranscript(message);
+        }
+        console.log(`Loaded ${savedMessages.length} messages from chat history`);
+    }
+
     // Set initial status
     updateStatus('Ready', 'success');
 
@@ -1149,6 +1230,7 @@ if (document.readyState === 'loading') {
 // Export for testing or external use
 window.AppState = AppState;
 window.ThemeManager = themeManager;
+window.HistoryStorage = HistoryStorage;
 window.OllamaApp = {
     addMessage: appendMessage,
     clearChat: clearChatTranscript,
