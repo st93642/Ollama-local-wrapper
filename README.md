@@ -188,6 +188,47 @@ If the manifest can’t be loaded, the app will still work with local models.
 
 - Long generations are aborted after `chatTimeoutMs` (default 120s). Increase it via `window.OllamaConfig.chatTimeoutMs`.
 
+## Chat History
+
+The app automatically persists your conversation history across browser sessions.
+
+### Where is it stored?
+
+By default, chat history is stored in your browser's **localStorage** under the key `ollama-chat-history`. This means:
+
+- **Persistence**: Your chat history is saved locally on your machine and restored when you reopen the app
+- **Privacy**: History is stored in your browser only and is never sent to any server
+- **Browser-specific**: Each browser profile maintains its own separate chat history
+
+### How to clear history
+
+There are two ways to clear your chat history:
+
+1. **In the UI**: Click the **"Clear chat"** button in the left sidebar. You'll be asked to confirm before the history is deleted.
+2. **Manually**: Open your browser's Developer Tools → Storage/Application tab → LocalStorage → Find `ollama-chat-history` and delete it.
+
+### History retention limit
+
+By default, the app keeps the last 1000 messages to prevent localStorage from becoming too large. You can customize this limit via configuration:
+
+```js
+window.OllamaConfig = {
+    maxHistoryMessages: 500, // Keep only the last 500 messages
+};
+```
+
+### Desktop wrapper configuration
+
+For desktop applications wrapping this UI (like Tauri or Electron apps), you can optionally store history in a custom directory instead of browser localStorage:
+
+```js
+window.OllamaConfig = {
+    historyPath: '~/.ollama/chat-history.json', // Desktop app storage path
+};
+```
+
+When `historyPath` is configured, the app will attempt to store history at that filesystem location instead of using localStorage. This allows for better integration with native desktop wrappers.
+
 ## License
 
 See [LICENSE](LICENSE).
