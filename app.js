@@ -147,6 +147,7 @@ const AppState = {
     isStreaming: false,
 
     messages: [],
+    pendingImages: [],
 
     availableModels: [],
     
@@ -254,6 +255,9 @@ const DOMElements = {
     clearChatButton: null,
     statusText: null,
     tokenCount: null,
+    attachImageButton: null,
+    imageInput: null,
+    thumbnailStrip: null,
 };
 
 function sleep(ms) {
@@ -623,6 +627,9 @@ function initializeDOMElements() {
     DOMElements.clearChatButton = document.getElementById('clearChatButton');
     DOMElements.statusText = document.getElementById('statusText');
     DOMElements.tokenCount = document.getElementById('tokenCount');
+    DOMElements.attachImageButton = document.getElementById('attachImageButton');
+    DOMElements.imageInput = document.getElementById('imageInput');
+    DOMElements.thumbnailStrip = document.getElementById('thumbnailStrip');
 }
 
 /**
@@ -638,6 +645,165 @@ function validateDOMElements() {
         return false;
     }
     return true;
+}
+
+/**
+ * Image attachment utilities
+ */
+const SUPPORTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const MAX_IMAGE_SIZE_MB = 20;
+const MAX_IMAGES_COUNT = 10;
+
+function getImageTypeDisplayName(mimeType) {
+    const typeMap = {
+        'image/jpeg': 'JPEG',
+        'image/png': 'PNG',
+        'image/gif': 'GIF',
+        'image/webp': 'WebP',
+    };
+    return typeMap[mimeType] || 'Unknown';
+}
+
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+function validateImageFile(file) {
+    if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+        return {
+            valid: false,
+            error: `Unsupported image type: ${getImageTypeDisplayName(file.type)}. Supported types: JPEG, PNG, GIF, WebP.`,
+        };
+    }
+
+    const fileSizeMB = file.size / (1024 * 1024);
+    if (fileSizeMB > MAX_IMAGE_SIZE_MB) {
+        return {
+            valid: false,
+            error: `File "${file.name}" is too large (${fileSizeMB.toFixed(1)}MB). Max size is ${MAX_IMAGE_SIZE_MB}MB.`,
+        };
+    }
+
+    return { valid: true };
+}
+
+async function handleImageInput(files) {
+    const errors = [];
+    const newImages = [];
+
+    for (const file of files) {
+        const validation = validateImageFile(file);
+        if (!validation.valid) {
+            errors.push(validation.error);
+            continue;
+        }
+
+        if (AppState.pendingImages.length + newImages.length >= MAX_IMAGES_COUNT) {
+            errors.push(`Maximum ${MAX_IMAGES_COUNT} images per message.`);
+            break;
+        }
+
+        try {
+            const base64Data = await readFileAsBase64(file);
+            newImages.push({
+                filename: file.name,
+                mimeType: file.type,
+                data: base64Data,
+            });
+        } catch (err) {
+            errors.push(`Failed to read "${file.name}": ${err.message}`);
+        }
+    }
+
+    if (errors.length > 0) {
+        setErrorBanner(errors.join(' '), 'danger');
+    }
+
+    if (newImages.length > 0) {
+        AppState.pendingImages.push(...newImages);
+        updateThumbnailStrip();
+    }
+}
+
+function updateThumbnailStrip() {
+    if (!DOMElements.thumbnailStrip) return;
+
+    if (AppState.pendingImages.length === 0) {
+        DOMElements.thumbnailStrip.style.display = 'none';
+        DOMElements.thumbnailStrip.innerHTML = '';
+        return;
+    }
+
+    DOMElements.thumbnailStrip.style.display = 'flex';
+    DOMElements.thumbnailStrip.innerHTML = '';
+
+    for (let i = 0; i < AppState.pendingImages.length; i++) {
+        const image = AppState.pendingImages[i];
+        const thumbnail = document.createElement('div');
+        thumbnail.className = 'attachment-thumbnail';
+
+        const img = document.createElement('img');
+        img.src = image.data;
+        img.alt = image.filename;
+        img.onclick = () => window.open(image.data, '_blank');
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'attachment-thumbnail-remove';
+        removeBtn.textContent = '×';
+        removeBtn.type = 'button';
+        removeBtn.onclick = (e) => {
+            e.preventDefault();
+            AppState.pendingImages.splice(i, 1);
+            updateThumbnailStrip();
+        };
+
+        thumbnail.appendChild(img);
+        thumbnail.appendChild(removeBtn);
+        DOMElements.thumbnailStrip.appendChild(thumbnail);
+    }
+}
+
+function clearPendingImages() {
+    AppState.pendingImages = [];
+    updateThumbnailStrip();
+    if (DOMElements.imageInput) {
+        DOMElements.imageInput.value = '';
+    }
+}
+
+function isModelMultimodal(modelName) {
+    if (!modelName) return false;
+    const knownMultimodalModels = [
+        'llava',
+        'vision',
+        'qwen',
+        'minicpm',
+        'cogvlm',
+        'llama2-vision',
+        'mistral-large',
+        'mistral',
+        'gemini',
+        'claude',
+        'gpt',
+    ];
+    const normalized = modelName.toLowerCase();
+    return knownMultimodalModels.some((model) => normalized.includes(model));
+}
+
+function warnIfModelNotMultimodal() {
+    if (AppState.pendingImages.length === 0) return;
+
+    if (!isModelMultimodal(AppState.currentModel)) {
+        setErrorBanner(
+            `Warning: The selected model "${AppState.currentModel}" may not support vision capabilities. Consider switching to a multimodal model (e.g., llava, qwen, mistral-large).`,
+            'warning'
+        );
+    }
 }
 
 /**
@@ -698,6 +864,25 @@ function setupEventListeners() {
         DOMElements.messageInput.addEventListener('input', autoExpandTextarea);
         DOMElements.messageInput.addEventListener('keydown', handleMessageInputKeydown);
     }
+
+    // Image Attachment
+    if (DOMElements.attachImageButton) {
+        DOMElements.attachImageButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (DOMElements.imageInput) {
+                DOMElements.imageInput.click();
+            }
+        });
+    }
+
+    if (DOMElements.imageInput) {
+        DOMElements.imageInput.addEventListener('change', async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (files.length > 0) {
+                await handleImageInput(files);
+            }
+        });
+    }
 }
 
 /**
@@ -750,7 +935,7 @@ async function handleMessageSubmit(e) {
 
     const message = DOMElements.messageInput.value.trim();
 
-    if (!message) {
+    if (!message && AppState.pendingImages.length === 0) {
         updateStatus('Message cannot be empty', 'warning');
         return;
     }
@@ -758,8 +943,14 @@ async function handleMessageSubmit(e) {
     const modelAtSend = AppState.currentModel;
     const temperatureAtSend = AppState.temperature;
     const maxTokensAtSend = AppState.maxTokens;
+    const imagesToSend = AppState.pendingImages.length > 0 ? [...AppState.pendingImages] : null;
 
-    appendMessage('user', message, modelAtSend);
+    if (imagesToSend) {
+        warnIfModelNotMultimodal();
+    }
+
+    appendMessage('user', message, modelAtSend, imagesToSend);
+    clearPendingImages();
 
     DOMElements.messageInput.value = '';
     DOMElements.messageInput.style.height = 'auto';
@@ -807,6 +998,7 @@ async function handleMessageSubmit(e) {
             AppState.messages[assistantMessageIndex].content += '\n\n[Response stopped by user]';
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
             historyStorage.save(AppState.messages);
+            clearPendingImages();
         } else if (
             (errorMessage.includes('Failed') && errorMessage.includes('0')) ||
             errorMessage.toLowerCase().includes('unable to connect') ||
@@ -822,12 +1014,14 @@ async function handleMessageSubmit(e) {
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
             historyStorage.save(AppState.messages);
             updateStatus('Failed to connect', 'error');
+            clearPendingImages();
         } else {
             setErrorBanner(errorMessage, 'danger');
             AppState.messages[assistantMessageIndex].content = `[Error: ${errorMessage}]`;
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
             historyStorage.save(AppState.messages);
             updateStatus('Failed to generate response', 'error');
+            clearPendingImages();
         }
     } finally {
         setLoadingState(false);
@@ -944,6 +1138,22 @@ function renderMessageToTranscript(message) {
     contentDiv.appendChild(metaDiv);
     contentDiv.appendChild(textDiv);
 
+    if (message.images && message.images.length > 0) {
+        const imagesDiv = document.createElement('div');
+        imagesDiv.className = 'message-images';
+
+        for (const image of message.images) {
+            const imgElement = document.createElement('img');
+            imgElement.className = 'message-image';
+            imgElement.src = image.data;
+            imgElement.alt = image.filename;
+            imgElement.onclick = () => window.open(image.data, '_blank');
+            imagesDiv.appendChild(imgElement);
+        }
+
+        contentDiv.appendChild(imagesDiv);
+    }
+
     messageDiv.appendChild(avatarDiv);
     messageDiv.appendChild(contentDiv);
 
@@ -951,13 +1161,17 @@ function renderMessageToTranscript(message) {
     scrollChatToBottom();
 }
 
-function appendMessage(role, content, model = null) {
+function appendMessage(role, content, model = null, images = null) {
     const message = {
         role,
         content,
         timestamp: new Date().toISOString(),
         model: model || null,
     };
+
+    if (images && images.length > 0) {
+        message.images = images;
+    }
 
     AppState.messages.push(message);
     renderMessageToTranscript(message);
@@ -984,7 +1198,13 @@ function handleClearChat() {
 function getConversationContextForRequest() {
     return AppState.messages
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({ role: m.role, content: m.content }));
+        .map((m) => {
+            const messageObj = { role: m.role, content: m.content };
+            if (m.images && m.images.length > 0) {
+                messageObj.images = m.images;
+            }
+            return messageObj;
+        });
 }
 
 function getRequestBaseUrlForModel(modelName) {
