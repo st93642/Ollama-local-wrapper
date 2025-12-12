@@ -53,10 +53,14 @@ const AppState = {
     maxTokens: window.OllamaConfig.defaultMaxTokens,
     isLoading: false,
     isRefreshingModels: false,
+    isStreaming: false,
 
     messages: [],
 
     availableModels: [],
+    
+    // For cancelling streaming requests
+    abortController: null,
 };
 
 // DOM Elements Cache
@@ -75,6 +79,7 @@ const DOMElements = {
     messageForm: null,
     messageInput: null,
     sendButton: null,
+    stopButton: null,
     statusText: null,
     tokenCount: null,
 };
@@ -430,6 +435,7 @@ function initializeDOMElements() {
     DOMElements.messageForm = document.getElementById('messageForm');
     DOMElements.messageInput = document.getElementById('messageInput');
     DOMElements.sendButton = document.getElementById('sendButton');
+    DOMElements.stopButton = document.getElementById('stopButton');
     DOMElements.statusText = document.getElementById('statusText');
     DOMElements.tokenCount = document.getElementById('tokenCount');
 }
@@ -492,6 +498,11 @@ function setupEventListeners() {
         DOMElements.messageForm.addEventListener('submit', handleMessageSubmit);
     }
 
+    // Stop Button
+    if (DOMElements.stopButton) {
+        DOMElements.stopButton.addEventListener('click', handleStopStreaming);
+    }
+
     // Message Input - Auto-expand textarea
     if (DOMElements.messageInput) {
         DOMElements.messageInput.addEventListener('input', autoExpandTextarea);
@@ -540,7 +551,7 @@ function handleModelChange(modelName) {
 async function handleMessageSubmit(e) {
     e.preventDefault();
 
-    if (AppState.isLoading) return;
+    if (AppState.isLoading || AppState.isStreaming) return;
 
     if (!AppState.currentModel) {
         updateStatus('Please select a model first', 'warning');
@@ -565,16 +576,29 @@ async function handleMessageSubmit(e) {
 
     setErrorBanner(null);
     setLoadingState(true);
+    setStreamingState(true);
     updateStatus(`Generating response with ${modelAtSend}...`, 'loading');
+
+    const assistantMessageIndex = AppState.messages.length;
+    const assistantMessage = appendMessage('assistant', '', modelAtSend);
+
+    AppState.abortController = new AbortController();
 
     try {
         const result = await requestOllamaChat({
             modelName: modelAtSend,
             temperature: temperatureAtSend,
             maxTokens: maxTokensAtSend,
+            onStreamToken: (token) => {
+                if (AppState.messages[assistantMessageIndex]) {
+                    AppState.messages[assistantMessageIndex].content += token;
+                    updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+                }
+            },
         });
 
-        appendMessage('assistant', result.content, modelAtSend);
+        AppState.messages[assistantMessageIndex].content = result.content;
+        updateStreamingMessageInUI(assistantMessageIndex, result.content);
 
         if (typeof result.tokenCount === 'number') {
             updateTokenCount(result.tokenCount);
@@ -585,11 +609,37 @@ async function handleMessageSubmit(e) {
         updateStatus('Ready', 'success');
     } catch (err) {
         console.error('Failed to generate response:', err);
-        setErrorBanner(err?.message || 'Failed to generate response. Please try again.', 'danger');
-        appendMessage('assistant', `Error: ${err?.message || 'Failed to generate response'}`, modelAtSend);
-        updateStatus('Failed to generate response', 'error');
+        const errorMessage = err?.message || 'Failed to generate response. Please try again.';
+        
+        if (errorMessage.toLowerCase().includes('cancelled') || err.name === 'AbortError') {
+            updateStatus('Response stopped', 'warning');
+            AppState.messages[assistantMessageIndex].content += '\n\n[Response stopped by user]';
+            updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+        } else if (
+            (errorMessage.includes('Failed') && errorMessage.includes('0')) ||
+            errorMessage.toLowerCase().includes('unable to connect') ||
+            errorMessage.toLowerCase().includes('fetch') ||
+            errorMessage.toLowerCase().includes('unavailable') ||
+            errorMessage.toLowerCase().includes('econnrefused') ||
+            errorMessage.toLowerCase().includes('enotfound') ||
+            errorMessage.toLowerCase().includes('no response body') ||
+            errorMessage.toLowerCase().includes('request failed')
+        ) {
+            const displayMessage = 'Unable to connect to Ollama. Please make sure Ollama is running and accessible.';
+            setErrorBanner(displayMessage, 'danger');
+            AppState.messages[assistantMessageIndex].content = `[Error: ${displayMessage}]`;
+            updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            updateStatus('Failed to connect', 'error');
+        } else {
+            setErrorBanner(errorMessage, 'danger');
+            AppState.messages[assistantMessageIndex].content = `[Error: ${errorMessage}]`;
+            updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
+            updateStatus('Failed to generate response', 'error');
+        }
     } finally {
         setLoadingState(false);
+        setStreamingState(false);
+        AppState.abortController = null;
     }
 }
 
@@ -741,41 +791,96 @@ function getRequestBaseUrlForModel(modelName) {
     return explicitEndpoint || window.OllamaConfig.apiEndpoint;
 }
 
-async function requestOllamaChat({ modelName, temperature, maxTokens }) {
-    const url = buildOllamaUrlForBase(getRequestBaseUrlForModel(modelName), '/api/chat');
+async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamToken, onStreamingStatusChange }) {
+    const baseUrl = getRequestBaseUrlForModel(modelName);
+    const url = buildOllamaUrlForBase(baseUrl, '/api/chat');
 
     const payload = {
         model: modelName,
         messages: getConversationContextForRequest(),
-        stream: false,
+        stream: true,
         options: {
             temperature,
             num_predict: maxTokens,
         },
     };
 
-    const data = await fetchJsonWithRetry(url, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-        retries: 0,
-        timeoutMs: typeof window.OllamaConfig.chatTimeoutMs === 'number' ? window.OllamaConfig.chatTimeoutMs : 120_000,
-    });
+    const chatTimeoutMs = typeof window.OllamaConfig.chatTimeoutMs === 'number' ? window.OllamaConfig.chatTimeoutMs : 120_000;
+    const controller = AppState.abortController || new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), chatTimeoutMs);
 
-    const content = data?.message?.content ?? data?.response;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
 
-    if (typeof content !== 'string') {
-        throw new Error('Unexpected response from Ollama.');
+        if (!response.ok) {
+            throw new Error(`Request failed: ${response.status} ${response.statusText}`);
+        }
+
+        if (!response.body) {
+            throw new Error('No response body available');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let accumulatedContent = '';
+        let totalTokens = 0;
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n').filter((line) => line.trim());
+
+                for (const line of lines) {
+                    try {
+                        const data = JSON.parse(line);
+                        const token = data?.message?.content || '';
+
+                        if (token) {
+                            accumulatedContent += token;
+                            if (typeof onStreamToken === 'function') {
+                                onStreamToken(token);
+                            }
+                        }
+
+                        if (data?.eval_count) {
+                            totalTokens = data.eval_count;
+                        }
+                        if (data?.prompt_eval_count) {
+                            totalTokens += data.prompt_eval_count;
+                        }
+                    } catch (err) {
+                        console.warn('Failed to parse stream line:', line, err);
+                    }
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+
+        if (!accumulatedContent) {
+            throw new Error('No response content received from Ollama.');
+        }
+
+        return { content: accumulatedContent, tokenCount: totalTokens || undefined };
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error('Request cancelled');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
     }
-
-    const tokenCount =
-        typeof data?.eval_count === 'number'
-            ? data.eval_count + (typeof data?.prompt_eval_count === 'number' ? data.prompt_eval_count : 0)
-            : undefined;
-
-    return { content, tokenCount };
 }
 
 /**
@@ -790,13 +895,55 @@ function scrollChatToBottom() {
 }
 
 /**
+ * Handle stop/cancel streaming
+ */
+function handleStopStreaming() {
+    if (AppState.abortController) {
+        AppState.abortController.abort();
+        AppState.isStreaming = false;
+    }
+}
+
+/**
+ * Set streaming state
+ */
+function setStreamingState(isStreaming) {
+    AppState.isStreaming = isStreaming;
+    if (DOMElements.sendButton) {
+        DOMElements.sendButton.style.display = isStreaming ? 'none' : 'block';
+    }
+    if (DOMElements.stopButton) {
+        DOMElements.stopButton.style.display = isStreaming ? 'block' : 'none';
+    }
+}
+
+/**
+ * Update streaming message content in the UI
+ */
+function updateStreamingMessageInUI(messageIndex, content) {
+    if (!DOMElements.chatTranscript || messageIndex >= AppState.messages.length) return;
+
+    const messages = DOMElements.chatTranscript.querySelectorAll('.message');
+    if (messageIndex < messages.length) {
+        const messageElement = messages[messageIndex];
+        const textElement = messageElement.querySelector('.message-text');
+        if (textElement) {
+            textElement.textContent = content;
+            scrollChatToBottom();
+        }
+    }
+}
+
+/**
  * Set loading state
  */
 function setLoadingState(isLoading) {
     AppState.isLoading = isLoading;
     if (DOMElements.sendButton) {
         DOMElements.sendButton.disabled = isLoading;
-        DOMElements.sendButton.textContent = isLoading ? 'Sending...' : 'Send';
+        if (!AppState.isStreaming) {
+            DOMElements.sendButton.textContent = isLoading ? 'Sending...' : 'Send';
+        }
     }
     if (DOMElements.messageInput) {
         DOMElements.messageInput.disabled = isLoading;

@@ -327,6 +327,22 @@ body {
     transform: translateY(0);
 }
 
+.message-composer .btn-danger {
+    background-color: var(--danger-color);
+    border-color: var(--danger-color);
+}
+
+.message-composer .btn-danger:hover {
+    background-color: #bb2d3b;
+    border-color: #bb2d3b;
+}
+
+.message-composer .spinner-border-sm {
+    width: 1em;
+    height: 1em;
+    border-width: 0.2em;
+}
+
 /* Status Bar */
 .status-bar {
     flex-shrink: 0;
