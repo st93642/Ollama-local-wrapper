@@ -63,6 +63,36 @@
                                 </div>
                             </div>
 
+                            <div class="model-library">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mb-0">Model library</h5>
+                                </div>
+
+                                <input
+                                    id="librarySearchInput"
+                                    type="search"
+                                    class="form-control form-control-sm mb-2"
+                                    placeholder="Search models..."
+                                    aria-label="Search models"
+                                >
+
+                                <div class="library-table-wrapper">
+                                    <table class="table table-sm library-table mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th scope="col">Model</th>
+                                                <th scope="col" class="library-col-action">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="libraryTableBody">
+                                            <tr><td colspan="2" class="text-muted small">Loading library...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div id="libraryCountText" class="small text-muted mt-2"></div>
+                            </div>
+
                             <div class="mt-4 settings-panel">
                                 <h5 class="mb-3">Settings</h5>
                                 <div class="mb-3">
