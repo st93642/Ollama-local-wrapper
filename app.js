@@ -11,6 +11,9 @@ const DefaultOllamaConfig = {
     fetchRetryDelayMs: 450,
     fetchTimeoutMs: 4000,
 
+    libraryUrl: null,
+    pullTimeoutMs: 30 * 60 * 1000,
+
     defaultModel: 'llama2',
     defaultTemperature: 0.7,
     defaultMaxTokens: 512,
@@ -71,6 +74,8 @@ const DefaultOllamaConfig = {
         return {
             apiEndpoint: this.apiEndpoint,
             modelManifestUrl: this.modelManifestUrl,
+            libraryUrl: this.libraryUrl,
+            pullTimeoutMs: this.pullTimeoutMs,
             fetchRetries: this.fetchRetries,
             fetchRetryDelayMs: this.fetchRetryDelayMs,
             fetchTimeoutMs: this.fetchTimeoutMs,
@@ -150,7 +155,11 @@ const AppState = {
     pendingImages: [],
 
     availableModels: [],
-    
+
+    libraryCatalogModels: [],
+    librarySearchQuery: '',
+    activeModelPulls: {},
+
     // For cancelling streaming requests
     abortController: null,
 };
@@ -258,6 +267,10 @@ const DOMElements = {
     attachImageButton: null,
     imageInput: null,
     thumbnailStrip: null,
+
+    librarySearchInput: null,
+    libraryTableBody: null,
+    libraryCountText: null,
 };
 
 function sleep(ms) {
@@ -503,6 +516,315 @@ function mergeModels(localModels, cloudModels) {
     return list;
 }
 
+function coerceLibraryPayloadToEntries(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.models)) return payload.models;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.results)) return payload.results;
+    return [];
+}
+
+function normalizeLibraryCatalogEntry(entry) {
+    if (!entry || typeof entry !== 'object') return null;
+
+    const name = entry.name || entry.model || entry.id;
+    if (!name) return null;
+
+    const tags = Array.isArray(entry.tags)
+        ? entry.tags.filter(Boolean).map((t) => String(t))
+        : typeof entry.tags === 'string'
+            ? entry.tags
+                .split(',')
+                .map((t) => t.trim())
+                .filter(Boolean)
+            : [];
+
+    return {
+        name,
+        description: entry.description || entry.summary || entry.title || '',
+        tags,
+        family: entry.family || entry.details?.family,
+        parameterSize: entry.parameter_size || entry.parameterSize || entry.details?.parameter_size,
+        pulls: entry.pulls || entry.pull_count || entry.pullCount,
+        updatedAt: entry.updated_at || entry.updatedAt,
+        endpoint: entry.endpoint,
+    };
+}
+
+async function fetchLibraryModelsFromEndpoint() {
+    const libraryUrl = String(window.OllamaConfig.libraryUrl || '').trim();
+    if (!libraryUrl) return [];
+
+    try {
+        const data = await fetchJsonWithRetry(libraryUrl, {
+            retries: 0,
+            timeoutMs: window.OllamaConfig.fetchTimeoutMs,
+        });
+
+        const entries = coerceLibraryPayloadToEntries(data);
+        return entries.map(normalizeLibraryCatalogEntry).filter(Boolean);
+    } catch (err) {
+        console.warn('Failed to load library models from libraryUrl:', err);
+        return [];
+    }
+}
+
+function mergeLibraryCatalogModels(manifestModels, libraryEndpointModels) {
+    const merged = new Map();
+
+    const upsert = (model, source) => {
+        const normalized = normalizeModelName(model.name);
+        const existing = merged.get(normalized);
+
+        if (!existing) {
+            merged.set(normalized, {
+                name: model.name,
+                description: model.description || '',
+                tags: Array.isArray(model.tags) ? [...new Set(model.tags)] : [],
+                family: model.family,
+                parameterSize: model.parameterSize,
+                pulls: model.pulls,
+                updatedAt: model.updatedAt,
+                endpoint: model.endpoint,
+                catalogSources: [source],
+            });
+            return;
+        }
+
+        if (!existing.catalogSources.includes(source)) {
+            existing.catalogSources.push(source);
+        }
+
+        if (!existing.description && model.description) {
+            existing.description = model.description;
+        }
+
+        if (!existing.endpoint && model.endpoint) {
+            existing.endpoint = model.endpoint;
+        }
+
+        if (!existing.family && model.family) {
+            existing.family = model.family;
+        }
+
+        if (!existing.parameterSize && model.parameterSize) {
+            existing.parameterSize = model.parameterSize;
+        }
+
+        if (!existing.pulls && model.pulls) {
+            existing.pulls = model.pulls;
+        }
+
+        if (!existing.updatedAt && model.updatedAt) {
+            existing.updatedAt = model.updatedAt;
+        }
+
+        if (Array.isArray(model.tags) && model.tags.length > 0) {
+            const nextTags = new Set(existing.tags || []);
+            for (const tag of model.tags) nextTags.add(tag);
+            existing.tags = Array.from(nextTags);
+        }
+    };
+
+    for (const model of manifestModels || []) {
+        const normalized = normalizeLibraryCatalogEntry(model) || null;
+        if (normalized) upsert(normalized, 'manifest');
+    }
+
+    for (const model of libraryEndpointModels || []) {
+        const normalized = normalizeLibraryCatalogEntry(model) || null;
+        if (normalized) upsert(normalized, 'library');
+    }
+
+    const list = Array.from(merged.values());
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    return list;
+}
+
+function setLibraryTableMessage(message) {
+    if (!DOMElements.libraryTableBody) return;
+    DOMElements.libraryTableBody.innerHTML = '';
+
+    const row = document.createElement('tr');
+    const cell = document.createElement('td');
+    cell.colSpan = 2;
+    cell.className = 'text-muted small';
+    cell.textContent = message;
+    row.appendChild(cell);
+    DOMElements.libraryTableBody.appendChild(row);
+}
+
+function setLibraryCountText(message) {
+    if (!DOMElements.libraryCountText) return;
+    DOMElements.libraryCountText.textContent = message || '';
+}
+
+function getLibraryPullKey(modelName) {
+    return normalizeModelName(modelName);
+}
+
+function getLibraryPullState(modelName) {
+    const key = getLibraryPullKey(modelName);
+    return AppState.activeModelPulls[key] || null;
+}
+
+function setLibraryPullState(modelName, patch) {
+    const key = getLibraryPullKey(modelName);
+    const existing = AppState.activeModelPulls[key] || { modelName };
+    AppState.activeModelPulls[key] = {
+        ...existing,
+        ...patch,
+    };
+}
+
+function clearLibraryPullState(modelName) {
+    const key = getLibraryPullKey(modelName);
+    delete AppState.activeModelPulls[key];
+}
+
+function updateLibraryRowFromPullState(modelName) {
+    if (!DOMElements.libraryTableBody) return;
+
+    const key = getLibraryPullKey(modelName);
+    const row = DOMElements.libraryTableBody.querySelector(`tr[data-model-key="${key}"]`);
+    if (!row) return;
+
+    const button = row.querySelector('button[data-action="pull-model"]');
+    const spinner = row.querySelector('[data-role="pull-spinner"]');
+    const statusText = row.querySelector('[data-role="pull-status-text"]');
+
+    const state = getLibraryPullState(modelName);
+    const phase = state?.phase || 'idle';
+
+    if (button) {
+        button.disabled = phase === 'pulling' || phase === 'done';
+    }
+
+    if (spinner) {
+        spinner.classList.toggle('d-none', phase !== 'pulling');
+    }
+
+    if (statusText) {
+        const message = state?.message || (phase === 'idle' ? 'Not installed' : '');
+        statusText.textContent = message;
+        statusText.classList.remove('text-danger', 'text-success');
+        if (phase === 'error') statusText.classList.add('text-danger');
+        if (phase === 'done') statusText.classList.add('text-success');
+    }
+}
+
+function formatLibraryCatalogMeta(model) {
+    const bits = [];
+    if (model.family) bits.push(model.family);
+    if (model.parameterSize) bits.push(model.parameterSize);
+    if (typeof model.pulls === 'number') bits.push(`${model.pulls.toLocaleString()} pulls`);
+    if (Array.isArray(model.tags) && model.tags.length > 0) bits.push(model.tags.slice(0, 3).join(', '));
+    return bits.join(' • ');
+}
+
+function renderLibraryTable() {
+    if (!DOMElements.libraryTableBody) return;
+
+    const installedSet = new Set(
+        (AppState.availableModels || [])
+            .filter((m) => Array.isArray(m.sources) && m.sources.includes('local'))
+            .map((m) => normalizeModelName(m.name))
+    );
+
+    const query = String(AppState.librarySearchQuery || '').trim().toLowerCase();
+    const catalogModels = Array.isArray(AppState.libraryCatalogModels) ? AppState.libraryCatalogModels : [];
+
+    let modelsToShow = catalogModels.filter((m) => !installedSet.has(normalizeModelName(m.name)));
+
+    if (query) {
+        modelsToShow = modelsToShow.filter((m) => {
+            const haystack = `${m.name} ${m.description || ''} ${(m.tags || []).join(' ')}`.toLowerCase();
+            return haystack.includes(query);
+        });
+    }
+
+    DOMElements.libraryTableBody.innerHTML = '';
+
+    if (catalogModels.length === 0) {
+        setLibraryTableMessage('No library sources configured.');
+        setLibraryCountText('');
+        return;
+    }
+
+    if (modelsToShow.length === 0) {
+        setLibraryTableMessage(query ? 'No matching models.' : 'All library models are already installed.');
+        setLibraryCountText(query ? '0 results' : '');
+        return;
+    }
+
+    for (const model of modelsToShow) {
+        const row = document.createElement('tr');
+        row.dataset.modelKey = getLibraryPullKey(model.name);
+
+        const modelCell = document.createElement('td');
+        modelCell.className = 'library-model-cell';
+
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'library-model-name';
+        nameDiv.textContent = model.name;
+
+        const descDiv = document.createElement('div');
+        descDiv.className = 'library-model-description small text-muted';
+        descDiv.textContent = model.description || '';
+
+        const metaText = formatLibraryCatalogMeta(model);
+        if (metaText) {
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'library-model-meta small text-muted';
+            metaDiv.textContent = metaText;
+            modelCell.appendChild(nameDiv);
+            modelCell.appendChild(descDiv);
+            modelCell.appendChild(metaDiv);
+        } else {
+            modelCell.appendChild(nameDiv);
+            modelCell.appendChild(descDiv);
+        }
+
+        const actionCell = document.createElement('td');
+        actionCell.className = 'library-action-cell';
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn btn-primary btn-sm';
+        button.textContent = 'Pull';
+        button.dataset.action = 'pull-model';
+        button.dataset.modelName = model.name;
+
+        const progressDiv = document.createElement('div');
+        progressDiv.className = 'library-progress small text-muted mt-1';
+
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner-border spinner-border-sm me-1 d-none';
+        spinner.setAttribute('role', 'status');
+        spinner.setAttribute('aria-hidden', 'true');
+        spinner.dataset.role = 'pull-spinner';
+
+        const progressText = document.createElement('span');
+        progressText.dataset.role = 'pull-status-text';
+
+        progressDiv.appendChild(spinner);
+        progressDiv.appendChild(progressText);
+
+        actionCell.appendChild(button);
+        actionCell.appendChild(progressDiv);
+
+        row.appendChild(modelCell);
+        row.appendChild(actionCell);
+
+        DOMElements.libraryTableBody.appendChild(row);
+        updateLibraryRowFromPullState(model.name);
+    }
+
+    const suffix = query ? ` (filtered)` : '';
+    setLibraryCountText(`${modelsToShow.length} model${modelsToShow.length === 1 ? '' : 's'} available${suffix}`);
+}
+
 function renderModelSelect(models, { preserveSelection = true } = {}) {
     if (!DOMElements.modelSelect) return;
 
@@ -530,13 +852,22 @@ function renderModelSelect(models, { preserveSelection = true } = {}) {
         const option = document.createElement('option');
         option.value = model.name;
 
-        const provenanceLabel = model.sources.includes('local') && model.sources.includes('cloud')
-            ? 'Local + Cloud'
-            : model.sources.includes('local')
-                ? 'Local'
-                : 'Cloud';
+        const isInstalledLocally = model.sources.includes('local');
+        const explicitEndpoint = String(model.endpoint || '').trim();
+        const requestBaseUrl = explicitEndpoint || window.OllamaConfig.apiEndpoint;
+        const isSameAsLocalApi = normalizeBaseUrl(requestBaseUrl) === normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
+        const isPullRequired = !isInstalledLocally && isSameAsLocalApi;
+
+        const provenanceLabel = isPullRequired
+            ? 'Not installed'
+            : model.sources.includes('local') && model.sources.includes('cloud')
+                ? 'Local + Cloud'
+                : model.sources.includes('local')
+                    ? 'Local'
+                    : 'Cloud';
 
         option.textContent = `${model.name} (${provenanceLabel})`;
+        option.disabled = isPullRequired;
 
         option.dataset.sources = model.sources.join(',');
         option.dataset.description = model.description || '';
@@ -563,6 +894,8 @@ async function refreshModels({ preserveSelection = true } = {}) {
     setModelSelectLoading(true);
     setRefreshModelsButtonLoading(true);
     updateStatus('Loading models...', 'loading');
+    setLibraryTableMessage('Loading library...');
+    setLibraryCountText('');
 
     try {
         const cloudPromise = fetchCloudModelsFromManifest().catch((err) => {
@@ -580,12 +913,16 @@ async function refreshModels({ preserveSelection = true } = {}) {
             return [];
         });
 
-        const [cloudModels, localModels] = await Promise.all([cloudPromise, localPromise]);
+        const libraryPromise = fetchLibraryModelsFromEndpoint();
+
+        const [cloudModels, localModels, libraryModels] = await Promise.all([cloudPromise, localPromise, libraryPromise]);
 
         AppState.availableModels = mergeModels(localModels, cloudModels);
+        AppState.libraryCatalogModels = mergeLibraryCatalogModels(cloudModels, libraryModels);
 
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection });
+        renderLibraryTable();
 
         if (AppState.availableModels.length === 0) {
             updateStatus('No models available', 'warning');
@@ -596,12 +933,189 @@ async function refreshModels({ preserveSelection = true } = {}) {
         console.error('Failed to refresh models:', err);
         setErrorBanner('Failed to load models. Please try again.', 'danger');
         AppState.availableModels = [];
+        AppState.libraryCatalogModels = [];
         setModelSelectLoading(false);
         renderModelSelect(AppState.availableModels, { preserveSelection: false });
+        renderLibraryTable();
         updateStatus('Failed to load models', 'error');
     } finally {
         setRefreshModelsButtonLoading(false);
         AppState.isRefreshingModels = false;
+    }
+}
+
+function formatBytes(bytes) {
+    const value = typeof bytes === 'number' ? bytes : Number(bytes);
+    if (!Number.isFinite(value) || value <= 0) return '0 B';
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
+    const scaled = value / Math.pow(1024, index);
+
+    return `${scaled.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+function buildPullProgressMessage(update) {
+    if (!update || typeof update !== 'object') return '';
+
+    const status = update.status || '';
+    const completed = typeof update.completed === 'number' ? update.completed : Number(update.completed);
+    const total = typeof update.total === 'number' ? update.total : Number(update.total);
+
+    if (Number.isFinite(completed) && Number.isFinite(total) && total > 0) {
+        const percent = Math.max(0, Math.min(100, Math.floor((completed / total) * 100)));
+        const detail = `${formatBytes(completed)} / ${formatBytes(total)} (${percent}%)`;
+        return status ? `${status} • ${detail}` : detail;
+    }
+
+    if (status) return status;
+    return '';
+}
+
+async function pullModel(modelName) {
+    const trimmedName = String(modelName || '').trim();
+    if (!trimmedName) return;
+
+    const key = getLibraryPullKey(trimmedName);
+    const existing = AppState.activeModelPulls[key];
+
+    if (existing?.phase === 'pulling') {
+        updateStatus(`Pull already in progress: ${trimmedName}`, 'warning');
+        return;
+    }
+
+    setErrorBanner(null);
+
+    const controller = new AbortController();
+    const pullTimeoutMs =
+        typeof window.OllamaConfig.pullTimeoutMs === 'number' ? window.OllamaConfig.pullTimeoutMs : 30 * 60 * 1000;
+
+    const timeoutId = setTimeout(() => controller.abort(), pullTimeoutMs);
+
+    setLibraryPullState(trimmedName, {
+        phase: 'pulling',
+        message: 'Starting...',
+        controller,
+    });
+    updateLibraryRowFromPullState(trimmedName);
+    updateStatus(`Pulling ${trimmedName}...`, 'loading');
+
+    try {
+        const url = buildOllamaUrl('/api/pull');
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name: trimmedName, stream: true }),
+            signal: controller.signal,
+        });
+
+        if (!response.ok) {
+            let detail = '';
+            try {
+                detail = await response.text();
+            } catch {
+                detail = '';
+            }
+
+            const suffix = detail ? ` - ${detail}` : '';
+            throw new Error(`Pull failed: ${response.status} ${response.statusText}${suffix}`);
+        }
+
+        if (!response.body) {
+            throw new Error('No response body available');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        let buffer = '';
+        let lastUiUpdate = 0;
+
+        try {
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || '';
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+
+                    let data;
+                    try {
+                        data = JSON.parse(trimmed);
+                    } catch (err) {
+                        console.warn('Failed to parse pull stream line:', trimmed, err);
+                        continue;
+                    }
+
+                    if (data?.error) {
+                        throw new Error(String(data.error));
+                    }
+
+                    const message = buildPullProgressMessage(data);
+                    if (!message) continue;
+
+                    setLibraryPullState(trimmedName, { phase: 'pulling', message });
+
+                    const now = Date.now();
+                    if (now - lastUiUpdate > 150) {
+                        updateLibraryRowFromPullState(trimmedName);
+                        updateStatus(`Pulling ${trimmedName}: ${message}`, 'loading');
+                        lastUiUpdate = now;
+                    }
+                }
+            }
+
+            const remainder = buffer.trim();
+            if (remainder) {
+                try {
+                    const data = JSON.parse(remainder);
+                    if (data?.error) {
+                        throw new Error(String(data.error));
+                    }
+                } catch {
+                    // ignore
+                }
+            }
+        } finally {
+            reader.releaseLock();
+        }
+
+        setLibraryPullState(trimmedName, { phase: 'done', message: 'Complete', controller: null });
+        updateLibraryRowFromPullState(trimmedName);
+        updateStatus(`Pulled ${trimmedName}`, 'success');
+
+        await refreshModels({ preserveSelection: true });
+        clearLibraryPullState(trimmedName);
+    } catch (err) {
+        const message = err?.name === 'AbortError'
+            ? `Pull timed out after ${Math.round(pullTimeoutMs / 1000)}s`
+            : err?.message || 'Failed to pull model.';
+
+        setLibraryPullState(trimmedName, { phase: 'error', message, controller: null });
+        updateLibraryRowFromPullState(trimmedName);
+
+        if (
+            message.toLowerCase().includes('unable to connect') ||
+            message.toLowerCase().includes('failed to fetch') ||
+            message.toLowerCase().includes('econnrefused') ||
+            message.toLowerCase().includes('enotfound')
+        ) {
+            setErrorBanner('Unable to connect to Ollama. Please make sure Ollama is running and accessible.', 'danger');
+        } else {
+            setErrorBanner(message, 'danger');
+        }
+
+        updateStatus(`Pull failed: ${trimmedName}`, 'error');
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
@@ -630,6 +1144,10 @@ function initializeDOMElements() {
     DOMElements.attachImageButton = document.getElementById('attachImageButton');
     DOMElements.imageInput = document.getElementById('imageInput');
     DOMElements.thumbnailStrip = document.getElementById('thumbnailStrip');
+
+    DOMElements.librarySearchInput = document.getElementById('librarySearchInput');
+    DOMElements.libraryTableBody = document.getElementById('libraryTableBody');
+    DOMElements.libraryCountText = document.getElementById('libraryCountText');
 }
 
 /**
@@ -820,6 +1338,25 @@ function setupEventListeners() {
     if (DOMElements.refreshModelsButton) {
         DOMElements.refreshModelsButton.addEventListener('click', () => {
             refreshModels({ preserveSelection: true });
+        });
+    }
+
+    if (DOMElements.librarySearchInput) {
+        DOMElements.librarySearchInput.addEventListener('input', (e) => {
+            AppState.librarySearchQuery = String(e.target.value || '');
+            renderLibraryTable();
+        });
+    }
+
+    if (DOMElements.libraryTableBody) {
+        DOMElements.libraryTableBody.addEventListener('click', (e) => {
+            const button = e.target.closest('button[data-action="pull-model"]');
+            if (!button) return;
+
+            const modelName = button.dataset.modelName;
+            if (!modelName) return;
+
+            pullModel(modelName);
         });
     }
 
@@ -1457,6 +1994,7 @@ window.OllamaApp = {
     setStatus: updateStatus,
     setModel: handleModelChange,
     refreshModels,
+    pullModel,
     setTheme: (theme) => {
         if (theme === 'light' || theme === 'dark') {
             themeManager.applyTheme(theme);

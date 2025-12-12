@@ -14,6 +14,7 @@ The wrapper provides a user-friendly web interface for:
 - **Conversation transcript** with message history
 - **Settings**: temperature + max tokens
 - Optional **“cloud” model entries** loaded from `manifest.json` (useful when pointing some models at a different Ollama-compatible base URL)
+- A **Model library** sidebar section that lists models known from the manifest / optional library feed but not yet installed, with a **Pull** button and streaming progress
 
 ## Project Structure
 
@@ -116,6 +117,8 @@ Defaults (see `app.js`):
 
 - `apiEndpoint`: `http://127.0.0.1:11434`
 - `modelManifestUrl`: `manifest.json`
+- `libraryUrl`: (optional) URL to fetch additional model catalog entries for the **Model library** panel
+- `pullTimeoutMs`: (optional) timeout for a model pull request (defaults to 30 minutes)
 - `chatTimeoutMs`: (optional) defaults to 120s
 - `defaultTheme`: `'dark'` (optional; can also be `'light'`)
 
@@ -125,6 +128,13 @@ Example override (set before `app.js` is loaded, or from the browser console):
 window.OllamaConfig = {
   apiEndpoint: 'http://127.0.0.1:11434',
   modelManifestUrl: 'manifest.json',
+
+  // Optional: add an extra "model catalog" feed for the Model library panel
+  libraryUrl: null,
+
+  // Optional: allow long pulls (large models can take a while)
+  pullTimeoutMs: 30 * 60 * 1000,
+
   defaultModel: 'llama3.2',
   defaultTemperature: 0.7,
   defaultMaxTokens: 512,
@@ -160,6 +170,27 @@ The app will:
 - also try to load optional cloud models from `modelManifestUrl`
 
 If the manifest can’t be loaded, the app will still work with local models.
+
+## Model library + pulling models
+
+The sidebar includes a **Model library** section that helps you install missing models.
+
+- The list is built from:
+  - `manifest.json` (`cloudModels`) / the embedded fallback list, and
+  - an optional `window.OllamaConfig.libraryUrl` feed (if configured).
+- The list is **filtered against your installed models** from `/api/tags`, so it only shows models that are known in the catalog but **not installed locally**.
+- Clicking **Pull** issues a streaming `POST /api/pull` to `apiEndpoint` and shows progress updates inline.
+- When the pull finishes, the app automatically refreshes `/api/tags` so the model becomes selectable.
+- Starting a second pull for the same model while one is already running is blocked.
+
+### `libraryUrl` response format
+
+The app is lenient about the feed shape. It accepts either:
+
+- an array of entries, or
+- an object containing an array under `models`, `items`, `results`, or `data`.
+
+Each entry should have at least a `name` field, and can optionally include `description`, `tags`, `family`, and `parameter_size`.
 
 ## Troubleshooting
 

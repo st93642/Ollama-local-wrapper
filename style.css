@@ -165,6 +165,63 @@ body {
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
+.model-library {
+    background-color: var(--color-panel);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.model-library h5 {
+    margin-bottom: 0;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.library-table-wrapper {
+    max-height: 340px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    background-color: var(--color-surface-alt);
+}
+
+.library-table {
+    margin-bottom: 0;
+}
+
+.library-table th,
+.library-table td {
+    padding: 0.5rem;
+    border-color: var(--color-border);
+    vertical-align: top;
+}
+
+.library-col-action {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.library-model-name {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.9rem;
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.library-model-description,
+.library-model-meta {
+    line-height: 1.25;
+}
+
+.library-action-cell .btn {
+    min-width: 3.5rem;
+}
+
+.library-progress {
+    min-height: 1.1rem;
+}
+
 .settings-panel {
     background-color: var(--color-panel);
     padding: 1rem;
