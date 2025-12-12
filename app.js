@@ -83,94 +83,64 @@ const DefaultOllamaConfig = {
             "family": "gemma"
         },
         {
-            "name": "qwen3-vl",
-            "description": "The most powerful vision-language model in the Qwen model family to date",
+            "name": "qwen3-vl:235b-cloud",
+            "description": "The most powerful vision-language model in the Qwen model family to date - 235B cloud",
             "tags": ["vision", "tools", "cloud"],
             "family": "qwen"
         },
         {
-            "name": "devstral-2",
+            "name": "devstral-2:123b-cloud",
             "description": "123B model that excels at using tools to explore codebases, editing multiple files and power software engineering agents",
             "tags": ["tools", "cloud", "coding"],
             "family": "mistral"
         },
         {
-            "name": "gpt-oss",
-            "description": "OpenAI's open-weight models designed for powerful reasoning, agentic tasks, and versatile developer use cases",
+            "name": "gpt-oss:20b-cloud",
+            "description": "OpenAI's open-weight 20B model designed for powerful reasoning, agentic tasks, and versatile developer use cases",
             "tags": ["tools", "thinking", "cloud"],
             "family": "gpt"
         },
         {
-            "name": "ministral-3",
-            "description": "The Ministral 3 family is designed for edge deployment, capable of running on a wide range of hardware",
+            "name": "gpt-oss:120b-cloud",
+            "description": "OpenAI's open-weight 120B model designed for powerful reasoning, agentic tasks, and versatile developer use cases",
+            "tags": ["tools", "thinking", "cloud"],
+            "family": "gpt"
+        },
+        {
+            "name": "ministral-3:3b-cloud",
+            "description": "Ministral 3 3B - designed for edge deployment, capable of running on a wide range of hardware",
             "tags": ["vision", "tools", "cloud"],
             "family": "mistral"
         },
         {
-            "name": "qwen3-coder",
-            "description": "Alibaba's performant long context models for agentic and coding tasks",
+            "name": "ministral-3:8b-cloud",
+            "description": "Ministral 3 8B - designed for edge deployment, capable of running on a wide range of hardware",
+            "tags": ["vision", "tools", "cloud"],
+            "family": "mistral"
+        },
+        {
+            "name": "ministral-3:14b-cloud",
+            "description": "Ministral 3 14B - designed for edge deployment, capable of running on a wide range of hardware",
+            "tags": ["vision", "tools", "cloud"],
+            "family": "mistral"
+        },
+        {
+            "name": "qwen3-coder:480b-cloud",
+            "description": "Alibaba's performant 480B long context model for agentic and coding tasks",
             "tags": ["tools", "cloud", "coding"],
             "family": "qwen"
         },
         {
-            "name": "glm-4.6",
-            "description": "Advanced agentic, reasoning and coding capabilities",
-            "tags": ["tools", "thinking", "cloud"],
-            "family": "glm"
-        },
-        {
-            "name": "deepseek-v3.1",
-            "description": "DeepSeek-V3.1-Terminus is a hybrid model that supports both thinking mode and non-thinking mode",
+            "name": "deepseek-v3.1:671b-cloud",
+            "description": "DeepSeek-V3.1-Terminus 671B hybrid model that supports both thinking mode and non-thinking mode",
             "tags": ["tools", "thinking", "cloud"],
             "family": "deepseek"
         },
         {
-            "name": "gemini-3-pro-preview",
-            "description": "Google's most intelligent model with SOTA reasoning and multimodal understanding, and powerful agentic and vibe coding capabilities",
-            "tags": ["vision", "tools", "thinking", "cloud"],
-            "family": "gemini"
-        },
-        {
-            "name": "minimax-m2",
-            "description": "MiniMax M2 is a high-efficiency large language model built for coding and agentic workflows",
-            "tags": ["tools", "thinking", "cloud"],
-            "family": "minimax"
-        },
-        {
-            "name": "kimi-k2",
-            "description": "A state-of-the-art mixture-of-experts (MoE) language model with significant improvements in performance",
-            "tags": ["tools", "cloud"],
-            "family": "kimi"
-        },
-        {
-            "name": "cogito-2.1",
-            "description": "The Cogito v2.1 LLMs are instruction tuned generative models. All models are released under MIT license for commercial use",
+            "name": "cogito-2.1:671b-cloud",
+            "description": "Cogito v2.1 671B instruction tuned generative model. Released under MIT license for commercial use",
             "tags": ["cloud"],
             "family": "cogito"
-        },
-        {
-            "name": "kimi-k2-thinking",
-            "description": "Kimi K2 Thinking, Moonshot AI's best open-source thinking model",
-            "tags": ["tools", "thinking", "cloud"],
-            "family": "kimi"
-        },
-        {
-            "name": "qwen3-next",
-            "description": "The first installment in the Qwen3-Next series with strong performance in terms of both parameter efficiency and inference speed",
-            "tags": ["tools", "thinking", "cloud"],
-            "family": "qwen"
-        },
-        {
-            "name": "mistral-large-3",
-            "description": "A general-purpose multimodal mixture-of-experts model for production-grade tasks and enterprise workloads",
-            "tags": ["vision", "tools", "cloud"],
-            "family": "mistral"
-        },
-        {
-            "name": "deepseek-v3.2",
-            "description": "DeepSeek-V3.2, a model that harmonizes high computational efficiency with superior reasoning and agent performance",
-            "tags": ["tools", "thinking", "cloud"],
-            "family": "deepseek"
         }
     ],
 
