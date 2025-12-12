@@ -107,6 +107,83 @@ const AppState = {
     abortController: null,
 };
 
+// Theme Manager
+class ThemeManager {
+    constructor() {
+        this.storageKey = 'ollama-theme';
+        this.currentTheme = null;
+    }
+
+    initialize() {
+        this.currentTheme = this.loadTheme();
+        this.applyTheme(this.currentTheme);
+        this.setupToggleListener();
+    }
+
+    loadTheme() {
+        // Try localStorage first
+        const stored = localStorage.getItem(this.storageKey);
+        if (stored && (stored === 'light' || stored === 'dark')) {
+            return stored;
+        }
+
+        // Fall back to config
+        if (window.OllamaConfig.defaultTheme && 
+            (window.OllamaConfig.defaultTheme === 'light' || window.OllamaConfig.defaultTheme === 'dark')) {
+            return window.OllamaConfig.defaultTheme;
+        }
+
+        // Fall back to system preference
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+            return 'light';
+        }
+
+        // Default to dark
+        return 'dark';
+    }
+
+    applyTheme(theme) {
+        const root = document.documentElement;
+        root.setAttribute('data-theme', theme);
+        this.currentTheme = theme;
+        this.updateToggleIcon(theme);
+    }
+
+    updateToggleIcon(theme) {
+        const toggle = document.getElementById('themeToggle');
+        if (!toggle) return;
+
+        const icon = toggle.querySelector('i');
+        const label = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+        
+        toggle.setAttribute('aria-label', label);
+        toggle.setAttribute('title', label);
+
+        if (icon) {
+            if (theme === 'dark') {
+                icon.className = 'bi bi-sun';
+            } else {
+                icon.className = 'bi bi-moon-stars';
+            }
+        }
+    }
+
+    toggle() {
+        const newTheme = this.currentTheme === 'dark' ? 'light' : 'dark';
+        this.applyTheme(newTheme);
+        localStorage.setItem(this.storageKey, newTheme);
+    }
+
+    setupToggleListener() {
+        const toggle = document.getElementById('themeToggle');
+        if (toggle) {
+            toggle.addEventListener('click', () => this.toggle());
+        }
+    }
+}
+
+const themeManager = new ThemeManager();
+
 // DOM Elements Cache
 const DOMElements = {
     app: null,
@@ -1032,6 +1109,9 @@ function updateTokenCount(count) {
 function initializeApp() {
     console.log('Initializing Ollama Wrapper SPA...');
 
+    // Initialize theme
+    themeManager.initialize();
+
     // Initialize DOM elements
     initializeDOMElements();
 
@@ -1068,10 +1148,18 @@ if (document.readyState === 'loading') {
 
 // Export for testing or external use
 window.AppState = AppState;
+window.ThemeManager = themeManager;
 window.OllamaApp = {
     addMessage: appendMessage,
     clearChat: clearChatTranscript,
     setStatus: updateStatus,
     setModel: handleModelChange,
     refreshModels,
+    setTheme: (theme) => {
+        if (theme === 'light' || theme === 'dark') {
+            themeManager.applyTheme(theme);
+            localStorage.setItem('ollama-theme', theme);
+        }
+    },
+    getTheme: () => themeManager.currentTheme,
 };

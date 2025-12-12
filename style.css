@@ -1,14 +1,56 @@
 /* CSS Variables and Root Styles */
 :root {
+    /* Semantic colors - light theme defaults */
+    --color-surface: #ffffff;
+    --color-surface-alt: #f8f9fa;
+    --color-panel: #ffffff;
+    --color-border: #dee2e6;
+    --color-text: #212529;
+    --color-text-secondary: #6c757d;
+    --color-text-muted: #868e96;
+    --color-input-bg: #ffffff;
+    --color-input-border: #dee2e6;
+
+    /* Status and semantic colors */
     --primary-color: #0d6efd;
     --secondary-color: #6c757d;
     --success-color: #198754;
     --danger-color: #dc3545;
-    --border-color: #dee2e6;
+    --warning-color: #fd7e14;
+
+    /* Light theme backgrounds */
     --light-bg: #f8f9fa;
     --dark-bg: #212529;
+
+    /* Shadows */
     --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
     --shadow-md: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+/* Dark theme (default) */
+[data-theme="dark"] {
+    --color-surface: #1e1e1e;
+    --color-surface-alt: #2d2d2d;
+    --color-panel: #2a2a2a;
+    --color-border: #404040;
+    --color-text: #e0e0e0;
+    --color-text-secondary: #a0a0a0;
+    --color-text-muted: #808080;
+    --color-input-bg: #2a2a2a;
+    --color-input-border: #404040;
+}
+
+/* Light theme */
+[data-theme="light"] {
+    --color-surface: #ffffff;
+    --color-surface-alt: #f8f9fa;
+    --color-panel: #ffffff;
+    --color-border: #dee2e6;
+    --color-text: #212529;
+    --color-text-secondary: #6c757d;
+    --color-text-muted: #868e96;
+    --color-input-bg: #ffffff;
+    --color-input-border: #dee2e6;
 }
 
 /* Global Styles */
@@ -22,8 +64,9 @@ body {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-    background-color: #fff;
-    color: #212529;
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* App Container */
@@ -38,18 +81,31 @@ body {
 .app-header {
     flex-shrink: 0;
     box-shadow: var(--shadow-sm);
-    background-color: #fff;
-    border-bottom: 1px solid var(--border-color);
+    background-color: var(--color-surface);
+    border-bottom: 1px solid var(--color-border);
 }
 
 .app-header .navbar {
     padding: 0.75rem 1rem;
+    background-color: var(--color-surface);
 }
 
 .app-header .navbar-brand {
     font-size: 1.25rem;
     font-weight: 600;
     letter-spacing: -0.5px;
+    color: var(--color-text) !important;
+}
+
+.app-header .btn-outline-secondary {
+    color: var(--color-text-secondary);
+    border-color: var(--color-border);
+}
+
+.app-header .btn-outline-secondary:hover {
+    background-color: var(--color-surface-alt);
+    border-color: var(--color-text-secondary);
+    color: var(--color-text);
 }
 
 /* Main Content Area */
@@ -71,9 +127,10 @@ body {
 
 /* Sidebar Styles */
 .sidebar {
-    background-color: var(--light-bg);
+    background-color: var(--color-surface-alt);
     overflow-y: auto;
     padding: 1.5rem 1rem;
+    border-end: 1px solid var(--color-border);
 }
 
 .sidebar-content {
@@ -83,7 +140,7 @@ body {
 }
 
 .model-selector {
-    background-color: #fff;
+    background-color: var(--color-panel);
     padding: 1rem;
     border-radius: 0.5rem;
     box-shadow: var(--shadow-sm);
@@ -92,20 +149,24 @@ body {
 .model-selector h5 {
     margin-bottom: 1rem;
     font-weight: 600;
-    color: #212529;
+    color: var(--color-text);
 }
 
 .model-selector select {
-    border-color: var(--border-color);
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--color-input-border);
 }
 
 .model-selector select:focus {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
 
 .settings-panel {
-    background-color: #fff;
+    background-color: var(--color-panel);
     padding: 1rem;
     border-radius: 0.5rem;
     box-shadow: var(--shadow-sm);
@@ -113,13 +174,13 @@ body {
 
 .settings-panel h5 {
     font-weight: 600;
-    color: #212529;
+    color: var(--color-text);
 }
 
 .settings-panel .form-label {
     font-size: 0.875rem;
     font-weight: 500;
-    color: #495057;
+    color: var(--color-text-secondary);
     margin-bottom: 0.5rem;
 }
 
@@ -139,7 +200,7 @@ body {
 .chat-container {
     display: flex;
     flex-direction: column;
-    background-color: #fff;
+    background-color: var(--color-surface);
     overflow: visible;
 }
 
@@ -150,7 +211,7 @@ body {
     overflow-y: auto;
     max-height: calc(100vh - 200px);
     padding: 1.5rem;
-    background-color: #f5f5f5;
+    background-color: var(--color-surface-alt);
 }
 
 .chat-transcript .placeholder-content {
@@ -158,6 +219,7 @@ body {
     align-items: center;
     justify-content: center;
     height: 100%;
+    color: var(--color-text-muted);
 }
 
 .chat-transcript .placeholder-content p {
@@ -273,20 +335,21 @@ body {
 }
 
 .message.assistant .message-content {
-    background-color: #e9ecef;
-    color: #212529;
+    background-color: var(--color-panel);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
     border-bottom-left-radius: 0.25rem;
 }
 
 .message.assistant .message-meta {
-    color: rgba(33, 37, 41, 0.7);
+    color: var(--color-text-secondary);
 }
 
 .message.system .message-content {
     max-width: 100%;
     padding: 0.25rem 0.5rem;
     background: transparent;
-    color: var(--secondary-color);
+    color: var(--color-text-secondary);
     font-size: 0.85rem;
     text-align: center;
 }
@@ -294,8 +357,8 @@ body {
 /* Message Composer */
 .message-composer {
     flex-shrink: 0;
-    background-color: #f8f9fa;
-    border-top: 1px solid var(--border-color);
+    background-color: var(--color-surface-alt);
+    border-top: 1px solid var(--color-border);
     max-height: 300px;
     overflow-y: auto;
 }
@@ -307,11 +370,15 @@ body {
 .message-composer textarea {
     resize: vertical;
     max-height: 200px;
-    border-color: var(--border-color);
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--color-input-border);
     font-size: 0.95rem;
 }
 
 .message-composer textarea:focus {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
     border-color: var(--primary-color);
     box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
 }
@@ -349,13 +416,14 @@ body {
 /* Status Bar */
 .status-bar {
     flex-shrink: 0;
-    border-top: 1px solid var(--border-color);
-    background-color: #f8f9fa;
+    border-top: 1px solid var(--color-border);
+    background-color: var(--color-surface-alt);
     height: 2.5rem;
     display: flex;
     align-items: center;
     padding: 0 1rem;
     overflow: hidden;
+    color: var(--color-text-secondary);
 }
 
 .status-bar .d-flex {
@@ -424,7 +492,7 @@ body {
     .message-content {
         max-width: 85%;
     }
-2
+
     .message-composer textarea {
         max-height: 150px;
     }
@@ -487,15 +555,75 @@ body {
 
 /* Utility Classes */
 .text-muted {
-    color: var(--secondary-color) !important;
+    color: var(--color-text-secondary) !important;
 }
 
 .border-end {
-    border-right: 1px solid var(--border-color) !important;
+    border-right: 1px solid var(--color-border) !important;
 }
 
 .border-top {
-    border-top: 1px solid var(--border-color) !important;
+    border-top: 1px solid var(--color-border) !important;
+}
+
+.border-2 {
+    border-width: 1px !important;
+}
+
+.border-1 {
+    border-width: 1px !important;
+}
+
+/* Form controls */
+.form-control {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--color-input-border);
+}
+
+.form-control:focus {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+.form-select {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--color-input-border);
+}
+
+.form-select:focus {
+    background-color: var(--color-input-bg);
+    color: var(--color-text);
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Badge styling */
+.badge {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.75rem;
+}
+
+/* Alert styling */
+.alert {
+    background-color: var(--color-surface-alt);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+.alert-danger {
+    background-color: rgba(220, 53, 69, 0.1);
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.alert-warning {
+    background-color: rgba(253, 126, 20, 0.1);
+    border-color: #fd7e14;
+    color: #fd7e14;
 }
 
 /* Scrollbar Styling */
@@ -516,6 +644,14 @@ body {
     background-color: rgba(0, 0, 0, 0.3);
 }
 
+[data-theme="dark"] .chat-transcript::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .chat-transcript::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
 .sidebar::-webkit-scrollbar {
     width: 6px;
 }
@@ -533,6 +669,14 @@ body {
     background-color: rgba(0, 0, 0, 0.2);
 }
 
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme="dark"] .sidebar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
 /* Print Styles */
 @media print {
     .message-composer,
@@ -542,6 +686,6 @@ body {
     }
 
     .chat-transcript {
-        background-color: #fff;
+        background-color: var(--color-surface);
     }
 }

@@ -117,6 +117,7 @@ Defaults (see `app.js`):
 - `apiEndpoint`: `http://127.0.0.1:11434`
 - `modelManifestUrl`: `manifest.json`
 - `chatTimeoutMs`: (optional) defaults to 120s
+- `defaultTheme`: `'dark'` (optional; can also be `'light'`)
 
 Example override (set before `app.js` is loaded, or from the browser console):
 
@@ -128,8 +129,26 @@ window.OllamaConfig = {
   defaultTemperature: 0.7,
   defaultMaxTokens: 512,
   chatTimeoutMs: 120_000,
+  defaultTheme: 'dark', // or 'light'
 };
 ```
+
+## Theming
+
+The app includes a built-in light/dark theme toggle in the header (top-right corner).
+
+### Theme Behavior
+
+- **Default**: Dark theme on first visit (when no preference is saved)
+- **Persistence**: Your theme choice is saved to browser `localStorage` and restored on next visit
+- **Fallback**: If no stored preference, the app respects your system's `prefers-color-scheme` setting
+- **Override**: You can set a default theme via `window.OllamaConfig.defaultTheme = 'light'` or `'dark'` before the app loads
+
+### Switching Themes
+
+Click the theme toggle button (☀️ icon for light mode, 🌙 icon for dark mode) in the header to switch instantly. All UI elements—including messages, sidebar, chat area, and controls—update their colors in real-time to maintain readability and contrast in both themes.
+
+Both themes use semantic CSS custom properties to ensure consistent, accessible colors across all UI components.
 
 ### Cloud models (`manifest.json`)
 

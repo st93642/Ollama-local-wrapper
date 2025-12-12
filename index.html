@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,11 +15,20 @@
     <div id="app" class="app-container">
         <!-- Header -->
         <header class="app-header">
-            <nav class="navbar navbar-dark bg-dark">
+            <nav class="navbar">
                 <div class="container-fluid">
                     <span class="navbar-brand mb-0 h1">
                         <i class="bi bi-chat-dots"></i> Ollama Wrapper
                     </span>
+                    <button 
+                        id="themeToggle"
+                        type="button"
+                        class="btn btn-outline-secondary"
+                        aria-label="Toggle theme"
+                        title="Toggle light/dark theme"
+                    >
+                        <i class="bi bi-moon-stars"></i>
+                    </button>
                 </div>
             </nav>
         </header>
@@ -81,7 +90,7 @@
                         </div>
 
                         <!-- Message Composer -->
-                        <div class="message-composer border-top border-2 p-3 bg-light">
+                        <div class="message-composer border-top border-2 p-3">
                             <form id="messageForm" class="d-flex gap-2">
                                 <textarea 
                                     id="messageInput"
@@ -113,7 +122,7 @@
                         </div>
 
                         <!-- Status Bar -->
-                        <footer class="status-bar border-top border-1 px-3 py-2 bg-light small text-muted">
+                        <footer class="status-bar border-top border-1 px-3 py-2 small text-muted">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span id="statusText">Ready</span>
                                 <span id="tokenCount" class="badge bg-secondary">0 tokens</span>
