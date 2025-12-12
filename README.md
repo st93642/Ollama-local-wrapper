@@ -2,7 +2,7 @@
 
 A lightweight, browser-based single-page app (SPA) for chatting with [Ollama](https://ollama.com) models running on your machine.
 
-There’s no separate backend server for this project—the app talks directly to the Ollama HTTP API (default: `http://localhost:11434`).
+There’s no separate backend server for this project—the app talks directly to the Ollama HTTP API (default: `http://127.0.0.1:11434`).
 
 ## Overview
 
@@ -82,13 +82,36 @@ Just open `index.html` in your browser.
 - If your browser blocks local-file fetches (some configurations do), serve this folder as static files using any simple file server.
 - No backend/API server is needed for this project—only the Ollama server.
 
+### 4) Configure CORS (Important!)
+
+Since this app runs in the browser, Ollama must allow requests from your browser's origin.
+
+**Linux / macOS:**
+```bash
+OLLAMA_ORIGINS="*" ollama serve
+```
+
+**Windows (PowerShell):**
+```powershell
+$env:OLLAMA_ORIGINS="*"; ollama serve
+```
+
+If running as a system service (Linux systemd), add `Environment="OLLAMA_ORIGINS=*"` to your service override:
+```bash
+systemctl edit ollama.service
+# Add:
+# [Service]
+# Environment="OLLAMA_ORIGINS=*"
+systemctl restart ollama
+```
+
 ## Configuration
 
 The app reads configuration from a global `window.OllamaConfig` object.
 
 Defaults (see `app.js`):
 
-- `apiEndpoint`: `http://localhost:11434`
+- `apiEndpoint`: `http://127.0.0.1:11434`
 - `modelManifestUrl`: `manifest.json`
 - `chatTimeoutMs`: (optional) defaults to 120s
 
@@ -96,7 +119,7 @@ Example override (set before `app.js` is loaded, or from the browser console):
 
 ```js
 window.OllamaConfig = {
-  apiEndpoint: 'http://localhost:11434',
+  apiEndpoint: 'http://127.0.0.1:11434',
   modelManifestUrl: 'manifest.json',
   defaultModel: 'llama3.2',
   defaultTemperature: 0.7,

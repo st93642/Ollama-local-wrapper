@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Browser-based SPA that communicates directly with [Ollama](https://ollama.com) HTTP API—**no backend server**. The app talks to `http://localhost:11434` by default for local models and supports optional cloud model endpoints via `manifest.json`.
+Browser-based SPA that communicates directly with [Ollama](https://ollama.com) HTTP API—**no backend server**. The app talks to `http://127.0.0.1:11434` by default for local models and supports optional cloud model endpoints via `manifest.json`.
 
 ## Architecture
 
@@ -24,7 +24,7 @@ manifest.json → Optional cloud model definitions
 
 ```javascript
 // Local models fetched from:
-buildOllamaUrl('/api/tags')  // → http://localhost:11434/api/tags
+buildOllamaUrl('/api/tags')  // → http://127.0.0.1:11434/api/tags
 
 // Chat requests to:
 buildOllamaUrlForBase(baseUrl, '/api/chat')  // Supports custom endpoints per model
@@ -40,8 +40,8 @@ buildOllamaUrlForBase(baseUrl, '/api/chat')  // Supports custom endpoints per mo
 python3 -m http.server 8000
 # Then visit http://localhost:8000
 
-# Ensure Ollama is running:
-curl http://localhost:11434/api/tags
+# Ensure Ollama is running with CORS enabled:
+OLLAMA_ORIGINS="*" ollama serve
 ```
 
 ## Code Conventions

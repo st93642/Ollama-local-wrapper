@@ -5,7 +5,7 @@
 
 // Global Configuration Object
 const DefaultOllamaConfig = {
-    apiEndpoint: 'http://localhost:11434',
+    apiEndpoint: 'http://127.0.0.1:11434',
     modelManifestUrl: 'manifest.json',
     fetchRetries: 2,
     fetchRetryDelayMs: 450,
@@ -14,6 +14,50 @@ const DefaultOllamaConfig = {
     defaultModel: 'llama2',
     defaultTemperature: 0.7,
     defaultMaxTokens: 512,
+
+    // Embedded cloud models (fallback when manifest.json unavailable)
+    embeddedCloudModels: [
+        {
+            "name": "mistral-large-3:675b-cloud",
+            "description": "Mistral Large 3 - Multimodal MoE model for production-grade tasks (675B)",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "ministral-3:14b-cloud",
+            "description": "Ministral 3 14B - Efficient edge deployment model by Mistral",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "cogito-2.1:671b-cloud",
+            "description": "Cogito v2.1 - Instruction-tuned generative model (MIT licensed)",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "deepseek-v3.1:671b-cloud",
+            "description": "DeepSeek-V3.1 - Hybrid model supporting thinking mode and non-thinking mode",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "gpt-oss:20b-cloud",
+            "description": "GPT-OSS 20B - OpenAI's open-weight model for reasoning and coding",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "gpt-oss:120b-cloud",
+            "description": "GPT-OSS 120B - Large version for advanced reasoning tasks",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "qwen3-coder:480b-cloud",
+            "description": "Qwen3-Coder 480B - Alibaba's performant model for agentic and coding tasks",
+            "endpoint": "http://127.0.0.1:11434"
+        },
+        {
+            "name": "gemini-3-pro-preview:latest",
+            "description": "Google Gemini 3 Pro Preview - Advanced reasoning and multimodal understanding",
+            "endpoint": "http://127.0.0.1:11434"
+        }
+    ],
 
     // Method to update config from manifest or external source
     loadFromManifest(manifestData) {
@@ -247,21 +291,33 @@ async function fetchLocalModels() {
 async function fetchCloudModelsFromManifest() {
     const manifestUrl = String(window.OllamaConfig.modelManifestUrl || 'manifest.json').trim();
 
-    const data = await fetchJsonWithRetry(manifestUrl, {
-        retries: 0,
-        timeoutMs: window.OllamaConfig.fetchTimeoutMs,
-    });
+    try {
+        const data = await fetchJsonWithRetry(manifestUrl, {
+            retries: 0,
+            timeoutMs: window.OllamaConfig.fetchTimeoutMs,
+        });
 
-    const models = Array.isArray(data?.cloudModels) ? data.cloudModels : [];
+        const models = Array.isArray(data?.cloudModels) ? data.cloudModels : [];
 
-    return models
-        .filter((m) => m && m.name)
-        .map((m) => ({
-            name: m.name,
-            description: m.description,
-            endpoint: m.endpoint,
-            sources: ['cloud'],
-        }));
+        return models
+            .filter((m) => m && m.name)
+            .map((m) => ({
+                name: m.name,
+                description: m.description,
+                endpoint: m.endpoint,
+                sources: ['cloud'],
+            }));
+    } catch (err) {
+        console.warn('Failed to load manifest.json, using embedded cloud models:', err);
+        // Fallback to embedded cloud models when manifest.json cannot be fetched
+        return (window.OllamaConfig.embeddedCloudModels || [])
+            .map((m) => ({
+                name: m.name,
+                description: m.description,
+                endpoint: m.endpoint,
+                sources: ['cloud'],
+            }));
+    }
 }
 
 function mergeModels(localModels, cloudModels) {
@@ -385,7 +441,7 @@ async function refreshModels({ preserveSelection = true } = {}) {
         const localPromise = fetchLocalModels().catch((err) => {
             const apiBase = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
             setErrorBanner(
-                `Unable to reach Ollama at ${apiBase}. Start Ollama and click “Refresh”. (The app will still show any cloud models.)`,
+                `Unable to reach Ollama at ${apiBase}. Ensure Ollama is running and allows browser requests (CORS).`,
                 'warning'
             );
             console.warn('Failed to load local models from Ollama:', err);
@@ -618,12 +674,11 @@ async function handleMessageSubmit(e) {
         } else if (
             (errorMessage.includes('Failed') && errorMessage.includes('0')) ||
             errorMessage.toLowerCase().includes('unable to connect') ||
-            errorMessage.toLowerCase().includes('fetch') ||
-            errorMessage.toLowerCase().includes('unavailable') ||
             errorMessage.toLowerCase().includes('econnrefused') ||
             errorMessage.toLowerCase().includes('enotfound') ||
             errorMessage.toLowerCase().includes('no response body') ||
-            errorMessage.toLowerCase().includes('request failed')
+            errorMessage.toLowerCase().includes('request failed') ||
+            errorMessage.toLowerCase().includes('failed to fetch')
         ) {
             const displayMessage = 'Unable to connect to Ollama. Please make sure Ollama is running and accessible.';
             setErrorBanner(displayMessage, 'danger');
