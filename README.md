@@ -30,18 +30,20 @@ The wrapper provides a user-friendly web interface for:
 
 ### 1) Install Ollama locally
 
-Follow the official instructions at https://ollama.com/download.
+Follow the official instructions at <https://ollama.com/download>.
 
 Common options:
 
 - **macOS**
   - Download the macOS app from the link above, or
   - Install via Homebrew (if you prefer):
+
     ```bash
     brew install ollama
     ```
 
 - **Linux**
+
   ```bash
   curl -fsSL https://ollama.com/install.sh | sh
   ```
@@ -120,17 +122,21 @@ If the manifest can’t be loaded, the app will still work with local models.
 
 1. Make sure Ollama is running.
 2. Make sure you’ve pulled at least one model:
+
    ```bash
    ollama pull llama3.2
    ```
+
 3. Click **Refresh** in the UI.
 
 ### “Unable to reach Ollama …”
 
 - Verify the Ollama server is reachable:
+
   ```bash
   curl http://localhost:11434/api/tags
   ```
+
 - If Ollama is on a different machine or port, set `window.OllamaConfig.apiEndpoint` accordingly.
 
 ### Streaming stops immediately / request cancelled
