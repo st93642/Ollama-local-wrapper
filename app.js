@@ -1944,6 +1944,8 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
                 for (const line of lines) {
                     try {
                         const data = JSON.parse(line);
+                        console.log('[requestOllamaChat] Stream data:', data);
+                        
                         const token = data?.message?.content || '';
 
                         if (token) {
@@ -1959,7 +1961,15 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
                         if (data?.prompt_eval_count) {
                             totalTokens += data.prompt_eval_count;
                         }
+                        
+                        // Check for errors in the response
+                        if (data?.error) {
+                            throw new Error(data.error);
+                        }
                     } catch (err) {
+                        if (err.message && !err.message.includes('JSON')) {
+                            throw err; // Re-throw non-parsing errors
+                        }
                         console.warn('Failed to parse stream line:', line, err);
                     }
                 }
