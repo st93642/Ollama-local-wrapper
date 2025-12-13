@@ -520,6 +520,26 @@ async function fetchLocalModels() {
 }
 
 async function fetchCloudModelsFromManifest() {
+    // Check for embedded manifest first (for bundled single-file distribution)
+    const embeddedManifestElement = document.getElementById('embeddedManifest');
+    if (embeddedManifestElement) {
+        try {
+            const data = JSON.parse(embeddedManifestElement.textContent);
+            const models = Array.isArray(data?.cloudModels) ? data.cloudModels : [];
+
+            return models
+                .filter((m) => m && m.name)
+                .map((m) => ({
+                    name: m.name,
+                    description: m.description,
+                    endpoint: m.endpoint,
+                    sources: ['cloud'],
+                }));
+        } catch (err) {
+            console.warn('Failed to parse embedded manifest, falling back to network fetch:', err);
+        }
+    }
+
     const manifestUrl = String(window.OllamaConfig.modelManifestUrl || 'manifest.json').trim();
 
     try {
