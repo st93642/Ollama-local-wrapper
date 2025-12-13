@@ -18,7 +18,9 @@ For easy distribution and offline use, a complete bundled version is available a
 
 ### Rebuild the Bundle
 
-To regenerate the bundle after making changes:
+The bundle is automatically rebuilt by GitHub Actions on every push to master when source files change. The workflow commits the updated `dist/ollama-wrapper.html` back to the repository.
+
+To manually regenerate the bundle:
 
 ```bash
 python3 scripts/bundle_single_file.py

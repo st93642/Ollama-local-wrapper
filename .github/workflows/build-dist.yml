@@ -1,0 +1,49 @@
+name: Build Single-File Distribution
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'style.css'
+      - 'manifest.json'
+      - 'vendor/**'
+      - 'scripts/bundle_single_file.py'
+      - '.github/workflows/build-dist.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      
+      - name: Build single-file bundle
+        run: |
+          python3 scripts/bundle_single_file.py
+          ls -lh dist/ollama-wrapper.html
+      
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --exit-code dist/ollama-wrapper.html && echo "changed=false" >> $GITHUB_OUTPUT || echo "changed=true" >> $GITHUB_OUTPUT
+      
+      - name: Commit and push if changed
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add dist/ollama-wrapper.html
+          git commit -m "chore: rebuild single-file distribution [skip ci]"
+          git push

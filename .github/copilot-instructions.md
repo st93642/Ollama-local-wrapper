@@ -83,6 +83,15 @@ systemctl edit ollama.service
 systemctl restart ollama
 ```
 
+### Single-File Distribution
+
+- **Location**: `dist/ollama-wrapper.html` - Self-contained bundle with all assets inlined
+- **Build**: Automatically rebuilt by GitHub Actions (`.github/workflows/build-dist.yml`) on push to master
+- **Manual build**: `python3 scripts/bundle_single_file.py`
+- **Purpose**: Easy distribution, works via `file://` protocol without web server
+- **Contents**: HTML, CSS, JS, Bootstrap vendor files, icons as inline SVG, embedded manifest
+- **When modifying**: Source files trigger auto-rebuild; workflow commits updated dist file with `[skip ci]` tag
+
 ## Code Conventions
 
 ### Normalization & URL Building
