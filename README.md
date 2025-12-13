@@ -4,7 +4,7 @@ A lightweight, browser-based chat interface for [Ollama](https://ollama.com) mod
 
 ## Single-File Bundle
 
-For easy distribution and offline use, a complete bundled version is available at `dist/ollama-wrapper.html` (~350 KB). This file contains:
+For easy distribution and offline use, a complete bundled version is available at `dist/ollama-wrapper.html` (~400 KB). This file contains:
 
 - All HTML, CSS, and JavaScript inlined (no external dependencies)
 - Bootstrap framework vendored and minified
@@ -171,7 +171,9 @@ Conversations are automatically saved in browser localStorage (last 1000 message
 
 ## Configuration (Optional)
 
-Configure the app by setting `window.OllamaConfig` before loading (add to `index.html` or browser console):
+Most users can configure the Ollama API endpoint directly in the UI under **Settings → API Endpoint**. The selection is persisted in browser storage and the input is validated (requires http/https and removes a trailing slash). Use **Reset** to return to the default `http://127.0.0.1:11434`.
+
+You can also configure the app by setting `window.OllamaConfig` before loading (add to `index.html` or browser console):
 
 ```js
 window.OllamaConfig = {
