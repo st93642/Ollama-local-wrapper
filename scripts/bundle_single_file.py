@@ -40,25 +40,17 @@ def minify_css(css):
     return css.strip()
 
 def minify_js(js):
-    """Basic JavaScript minification."""
-    # Remove single-line comments
-    lines = []
-    for line in js.split('\n'):
-        # Remove // comments
-        line = re.sub(r'//.*$', '', line)
-        if line.strip():
-            lines.append(line)
-    
-    js = '\n'.join(lines)
-    
-    # Remove multi-line comments
-    js = re.sub(r'/\*[^*]*\*+(?:[^/*][^*]*\*+)*/', '', js)
-    
-    # Minify whitespace
-    js = re.sub(r';\s*\n\s*', ';', js)
-    js = re.sub(r'\s+', ' ', js)
-    js = re.sub(r'\s*([{};:,=\(\)\[\]<>+\-*/%&|^!?])\s*', r'\1', js)
-    
+    """Lightweight JavaScript minification.
+
+    The single-file bundle must remain functional when opened directly (file://).
+
+    Avoid regex-based stripping of `//...` comments because it corrupts valid JavaScript
+    containing URLs like `http://...` and can also break regex literals.
+
+    Bootstrap is already vendored as a minified file; the app script is small enough
+    that aggressive minification is not worth the risk.
+    """
+
     return js.strip()
 
 def replace_icons(html):

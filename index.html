@@ -107,6 +107,37 @@
                                     <label for="maxTokensInput" class="form-label">Max Tokens</label>
                                     <input type="number" class="form-control form-control-sm" id="maxTokensInput" value="512" min="1" max="4096">
                                 </div>
+                                <div class="mb-3">
+                                    <label for="apiEndpointInput" class="form-label">API Endpoint</label>
+                                    <div class="input-group input-group-sm">
+                                        <input
+                                            type="url"
+                                            class="form-control"
+                                            id="apiEndpointInput"
+                                            placeholder="http://127.0.0.1:11434"
+                                            aria-label="Ollama API endpoint"
+                                            autocomplete="off"
+                                        >
+                                        <button
+                                            id="apiEndpointSaveButton"
+                                            type="button"
+                                            class="btn btn-outline-secondary"
+                                            aria-label="Save API endpoint"
+                                        >
+                                            Save
+                                        </button>
+                                        <button
+                                            id="apiEndpointResetButton"
+                                            type="button"
+                                            class="btn btn-outline-secondary"
+                                            aria-label="Reset API endpoint to default"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                    <div class="form-text">Requires http(s); trailing slash removed.</div>
+                                    <div id="apiEndpointFeedback" class="small text-muted mt-1"></div>
+                                </div>
                             </div>
 
                             <div class="mt-4">

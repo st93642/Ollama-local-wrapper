@@ -177,6 +177,16 @@ window.OllamaConfig = {
 window.OllamaConfig.loadFromManifest = DefaultOllamaConfig.loadFromManifest;
 window.OllamaConfig.getConfig = DefaultOllamaConfig.getConfig;
 
+// Apply persisted API endpoint override (before any network calls)
+const persistedApiEndpoint = loadStoredApiEndpoint();
+if (persistedApiEndpoint) {
+    window.OllamaConfig.apiEndpoint = persistedApiEndpoint;
+}
+
+// Normalize / validate the effective API endpoint
+const validatedApiEndpoint = parseAndNormalizeApiEndpoint(window.OllamaConfig.apiEndpoint);
+window.OllamaConfig.apiEndpoint = validatedApiEndpoint.value || DefaultOllamaConfig.apiEndpoint;
+
 // History Storage Helper
 class HistoryStorage {
     constructor() {
@@ -232,6 +242,8 @@ const AppState = {
     isLoading: false,
     isRefreshingModels: false,
     isStreaming: false,
+
+    isOllamaReachable: null,
 
     messages: [],
     pendingImages: [],
@@ -342,6 +354,10 @@ const DOMElements = {
     temperatureSlider: null,
     temperatureValue: null,
     maxTokensInput: null,
+    apiEndpointInput: null,
+    apiEndpointSaveButton: null,
+    apiEndpointResetButton: null,
+    apiEndpointFeedback: null,
     chatTranscript: null,
     messageForm: null,
     messageInput: null,
@@ -368,8 +384,106 @@ function normalizeModelName(name) {
 }
 
 function normalizeBaseUrl(baseUrl) {
-    const url = String(baseUrl || '').trim();
-    return url.endsWith('/') ? url.slice(0, -1) : url;
+    let url = String(baseUrl || '').trim();
+    while (url.endsWith('/')) {
+        url = url.slice(0, -1);
+    }
+    return url;
+}
+
+function coerceModelEndpoint(endpoint) {
+    const candidate = normalizeBaseUrl(endpoint);
+    if (!candidate) return undefined;
+
+    const defaultEndpoint = normalizeBaseUrl(DefaultOllamaConfig.apiEndpoint);
+    if (candidate === defaultEndpoint) return undefined;
+
+    return candidate;
+}
+
+function parseAndNormalizeApiEndpoint(rawValue) {
+    const raw = String(rawValue || '').trim();
+    if (!raw) {
+        return { value: null, error: 'API endpoint is required.' };
+    }
+
+    let url;
+    try {
+        url = new URL(raw);
+    } catch {
+        return { value: null, error: 'API endpoint must be a valid URL including http:// or https://.' };
+    }
+
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return { value: null, error: 'API endpoint must start with http:// or https://.' };
+    }
+
+    const normalized = normalizeBaseUrl(`${url.protocol}//${url.host}${url.pathname}`);
+    return { value: normalized, error: null };
+}
+
+function loadStoredApiEndpoint() {
+    try {
+        const stored = localStorage.getItem('ollama-api-endpoint');
+        if (!stored) return null;
+
+        const parsed = parseAndNormalizeApiEndpoint(stored);
+        if (parsed.error || !parsed.value) {
+            localStorage.removeItem('ollama-api-endpoint');
+            return null;
+        }
+
+        return parsed.value;
+    } catch (err) {
+        console.warn('Failed to load stored API endpoint:', err);
+        return null;
+    }
+}
+
+function storeApiEndpoint(value) {
+    try {
+        localStorage.setItem('ollama-api-endpoint', value);
+    } catch (err) {
+        console.warn('Failed to persist API endpoint:', err);
+    }
+}
+
+function clearStoredApiEndpoint() {
+    try {
+        localStorage.removeItem('ollama-api-endpoint');
+    } catch (err) {
+        console.warn('Failed to clear stored API endpoint:', err);
+    }
+}
+
+function setApiEndpointFeedback(message, variant = 'muted') {
+    if (!DOMElements.apiEndpointFeedback) return;
+
+    const variantClass =
+        variant === 'success'
+            ? 'text-success'
+            : variant === 'danger'
+                ? 'text-danger'
+                : variant === 'warning'
+                    ? 'text-warning'
+                    : 'text-muted';
+
+    DOMElements.apiEndpointFeedback.className = `small mt-1 ${variantClass}`;
+    DOMElements.apiEndpointFeedback.textContent = message || '';
+}
+
+function applyApiEndpoint(newEndpoint, { persist = true } = {}) {
+    const normalized = normalizeBaseUrl(newEndpoint);
+    window.OllamaConfig.apiEndpoint = normalized;
+
+    if (persist) {
+        storeApiEndpoint(normalized);
+    }
+
+    if (DOMElements.apiEndpointInput) {
+        DOMElements.apiEndpointInput.value = normalized;
+        DOMElements.apiEndpointInput.classList.remove('is-invalid');
+    }
 }
 
 function buildOllamaUrl(pathname) {
@@ -532,7 +646,7 @@ async function fetchCloudModelsFromManifest() {
                 .map((m) => ({
                     name: m.name,
                     description: m.description,
-                    endpoint: m.endpoint,
+                    endpoint: coerceModelEndpoint(m.endpoint),
                     sources: ['cloud'],
                 }));
         } catch (err) {
@@ -555,7 +669,7 @@ async function fetchCloudModelsFromManifest() {
             .map((m) => ({
                 name: m.name,
                 description: m.description,
-                endpoint: m.endpoint,
+                endpoint: coerceModelEndpoint(m.endpoint),
                 sources: ['cloud'],
             }));
     } catch (err) {
@@ -565,7 +679,7 @@ async function fetchCloudModelsFromManifest() {
             .map((m) => ({
                 name: m.name,
                 description: m.description,
-                endpoint: m.endpoint,
+                endpoint: coerceModelEndpoint(m.endpoint),
                 sources: ['cloud'],
             }));
     }
@@ -1011,20 +1125,27 @@ async function refreshModels({ preserveSelection = true } = {}) {
     setLibraryCountText('');
 
     try {
+        const apiBase = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
+
         const cloudPromise = fetchCloudModelsFromManifest().catch((err) => {
             console.warn('Failed to load cloud models manifest:', err);
             return [];
         });
 
-        const localPromise = fetchLocalModels().catch((err) => {
-            const apiBase = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
-            setErrorBanner(
-                `Unable to reach Ollama at ${apiBase}. Ensure Ollama is running and allows browser requests (CORS).`,
-                'warning'
-            );
-            console.warn('Failed to load local models from Ollama:', err);
-            return [];
-        });
+        const localPromise = fetchLocalModels()
+            .then((models) => {
+                AppState.isOllamaReachable = true;
+                return models;
+            })
+            .catch((err) => {
+                AppState.isOllamaReachable = false;
+                setErrorBanner(
+                    `Unable to reach Ollama at ${apiBase}. Ensure Ollama is running and allows browser requests (CORS).`,
+                    'warning'
+                );
+                console.warn('Failed to load local models from Ollama:', err);
+                return [];
+            });
 
         const libraryPromise = fetchLibraryModelsFromEndpoint();
 
@@ -1037,10 +1158,17 @@ async function refreshModels({ preserveSelection = true } = {}) {
         renderModelSelect(AppState.availableModels, { preserveSelection });
         renderLibraryTable();
 
-        if (AppState.availableModels.length === 0) {
-            updateStatus('No models available', 'warning');
+        if (AppState.isOllamaReachable === false) {
+            setApiEndpointFeedback(`Unable to reach: ${apiBase}`, 'danger');
+            updateStatus(`Unable to reach Ollama at ${apiBase}`, 'warning');
         } else {
-            updateStatus('Ready', 'success');
+            setApiEndpointFeedback(`Connected: ${apiBase}`, 'success');
+
+            if (AppState.availableModels.length === 0) {
+                updateStatus('No models available', 'warning');
+            } else {
+                updateStatus('Ready', 'success');
+            }
         }
     } catch (err) {
         console.error('Failed to refresh models:', err);
@@ -1268,6 +1396,10 @@ function initializeDOMElements() {
     DOMElements.temperatureSlider = document.getElementById('temperatureSlider');
     DOMElements.temperatureValue = document.getElementById('temperatureValue');
     DOMElements.maxTokensInput = document.getElementById('maxTokensInput');
+    DOMElements.apiEndpointInput = document.getElementById('apiEndpointInput');
+    DOMElements.apiEndpointSaveButton = document.getElementById('apiEndpointSaveButton');
+    DOMElements.apiEndpointResetButton = document.getElementById('apiEndpointResetButton');
+    DOMElements.apiEndpointFeedback = document.getElementById('apiEndpointFeedback');
     DOMElements.chatTranscript = document.getElementById('chatTranscript');
     DOMElements.messageForm = document.getElementById('messageForm');
     DOMElements.messageInput = document.getElementById('messageInput');
@@ -1516,6 +1648,29 @@ function setupEventListeners() {
         });
     }
 
+    // API Endpoint Settings
+    if (DOMElements.apiEndpointInput) {
+        DOMElements.apiEndpointInput.addEventListener('input', () => {
+            DOMElements.apiEndpointInput.classList.remove('is-invalid');
+            setApiEndpointFeedback('', 'muted');
+        });
+
+        DOMElements.apiEndpointInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleApiEndpointSave();
+            }
+        });
+    }
+
+    if (DOMElements.apiEndpointSaveButton) {
+        DOMElements.apiEndpointSaveButton.addEventListener('click', handleApiEndpointSave);
+    }
+
+    if (DOMElements.apiEndpointResetButton) {
+        DOMElements.apiEndpointResetButton.addEventListener('click', handleApiEndpointReset);
+    }
+
     // Message Form Submission
     if (DOMElements.messageForm) {
         DOMElements.messageForm.addEventListener('submit', handleMessageSubmit);
@@ -1555,6 +1710,64 @@ function setupEventListeners() {
             }
         });
     }
+}
+
+function initializeApiEndpointSettingsUI() {
+    if (!DOMElements.apiEndpointInput) return;
+
+    const activeEndpoint = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
+    DOMElements.apiEndpointInput.value = activeEndpoint;
+
+    const stored = loadStoredApiEndpoint();
+    const defaultEndpoint = normalizeBaseUrl(DefaultOllamaConfig.apiEndpoint);
+
+    if (stored && stored === activeEndpoint && stored !== defaultEndpoint) {
+        setApiEndpointFeedback(`Using saved endpoint: ${activeEndpoint}`, 'muted');
+    } else {
+        setApiEndpointFeedback(`Using endpoint: ${activeEndpoint}`, 'muted');
+    }
+}
+
+async function handleApiEndpointSave() {
+    if (!DOMElements.apiEndpointInput) return;
+
+    const parsed = parseAndNormalizeApiEndpoint(DOMElements.apiEndpointInput.value);
+    if (parsed.error || !parsed.value) {
+        DOMElements.apiEndpointInput.classList.add('is-invalid');
+        setApiEndpointFeedback(parsed.error || 'Invalid API endpoint.', 'danger');
+        return;
+    }
+
+    const defaultEndpoint = normalizeBaseUrl(DefaultOllamaConfig.apiEndpoint);
+
+    setErrorBanner(null);
+
+    if (parsed.value === defaultEndpoint) {
+        clearStoredApiEndpoint();
+        applyApiEndpoint(defaultEndpoint, { persist: false });
+    } else {
+        applyApiEndpoint(parsed.value, { persist: true });
+    }
+
+    updateStatus('API endpoint updated', 'success');
+    setApiEndpointFeedback(`Saved: ${normalizeBaseUrl(window.OllamaConfig.apiEndpoint)}`, 'success');
+
+    await testOllamaConnection({ announceSuccess: true });
+    refreshModels({ preserveSelection: false });
+}
+
+async function handleApiEndpointReset() {
+    const defaultEndpoint = normalizeBaseUrl(DefaultOllamaConfig.apiEndpoint);
+
+    setErrorBanner(null);
+    clearStoredApiEndpoint();
+    applyApiEndpoint(defaultEndpoint, { persist: false });
+
+    updateStatus('API endpoint reset to default', 'success');
+    setApiEndpointFeedback(`Reset: ${defaultEndpoint}`, 'success');
+
+    await testOllamaConnection({ announceSuccess: true });
+    refreshModels({ preserveSelection: false });
 }
 
 /**
@@ -1680,7 +1893,12 @@ async function handleMessageSubmit(e) {
             errorMessage.toLowerCase().includes('request failed') ||
             errorMessage.toLowerCase().includes('failed to fetch')
         ) {
-            const displayMessage = 'Unable to connect to Ollama. Please make sure Ollama is running and accessible.';
+            const apiBase = normalizeBaseUrl(getRequestBaseUrlForModel(modelAtSend));
+            const displayMessage = `Unable to connect to Ollama at ${apiBase}. Please make sure Ollama is running and accessible (CORS).`;
+
+            AppState.isOllamaReachable = false;
+            setApiEndpointFeedback(`Unable to reach: ${apiBase}`, 'danger');
+
             setErrorBanner(displayMessage, 'danger');
             AppState.messages[assistantMessageIndex].content = `[Error: ${displayMessage}]`;
             updateStreamingMessageInUI(assistantMessageIndex, AppState.messages[assistantMessageIndex].content);
@@ -2016,7 +2234,10 @@ async function requestOllamaChat({ modelName, temperature, maxTokens, onStreamTo
         
         // Check for network errors
         if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('NetworkError'))) {
-            throw new Error('Failed to connect to Ollama. Please ensure Ollama is running with CORS enabled: OLLAMA_ORIGINS=* ollama serve');
+            const apiBase = normalizeBaseUrl(baseUrl);
+            throw new Error(
+                `Failed to connect to Ollama at ${apiBase}. Please ensure Ollama is running with CORS enabled: OLLAMA_ORIGINS=* ollama serve`
+            );
         }
         
         throw err;
@@ -2134,6 +2355,8 @@ function initializeApp() {
         return;
     }
 
+    initializeApiEndpointSettingsUI();
+
     // Setup event listeners
     setupEventListeners();
 
@@ -2170,29 +2393,59 @@ function initializeApp() {
 /**
  * Test Ollama API connectivity
  */
-async function testOllamaConnection() {
+async function testOllamaConnection({ announceSuccess = false } = {}) {
+    const apiBase = normalizeBaseUrl(window.OllamaConfig.apiEndpoint);
+    setApiEndpointFeedback(`Testing: ${apiBase}`, 'muted');
+
     try {
         console.log('[testOllamaConnection] Testing connection to Ollama...');
         const url = buildOllamaUrl('/api/version');
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-        
-        const response = await fetch(url, { 
+        const response = await fetchWithTimeout(url, {
             method: 'GET',
-            signal: controller.signal 
+            timeoutMs: 5000,
         });
-        
-        clearTimeout(timeoutId);
-        
+
         if (response.ok) {
             const data = await response.json();
+            const version = data?.version ? ` (v${data.version})` : '';
+
+            AppState.isOllamaReachable = true;
+            setApiEndpointFeedback(`Connected${version}: ${apiBase}`, 'success');
+
+            if (
+                DOMElements.errorBanner &&
+                typeof DOMElements.errorBanner.textContent === 'string' &&
+                DOMElements.errorBanner.textContent.startsWith('Unable to reach Ollama at')
+            ) {
+                setErrorBanner(null);
+            }
+
+            if (announceSuccess) {
+                updateStatus(`Connected to Ollama${version}`, 'success');
+            }
+
             console.log('[testOllamaConnection] ✓ Connected to Ollama:', data);
             return true;
-        } else {
-            console.warn('[testOllamaConnection] ✗ Ollama responded with status:', response.status);
-            return false;
         }
+
+        AppState.isOllamaReachable = false;
+        setApiEndpointFeedback(`Ollama responded: ${response.status}`, 'warning');
+        setErrorBanner(
+            `Unable to reach Ollama at ${apiBase}. Ensure Ollama is running and allows browser requests (CORS).`,
+            'warning'
+        );
+        updateStatus(`Unable to reach Ollama at ${apiBase}`, 'warning');
+        console.warn('[testOllamaConnection] ✗ Ollama responded with status:', response.status);
+        return false;
     } catch (err) {
+        AppState.isOllamaReachable = false;
+        setApiEndpointFeedback(`Unable to reach: ${apiBase}`, 'danger');
+        setErrorBanner(
+            `Unable to reach Ollama at ${apiBase}. Ensure Ollama is running and allows browser requests (CORS).`,
+            'warning'
+        );
+        updateStatus(`Unable to reach Ollama at ${apiBase}`, 'warning');
+
         console.error('[testOllamaConnection] ✗ Failed to connect to Ollama:', err.message);
         console.error('[testOllamaConnection] Make sure Ollama is running: ollama serve');
         console.error('[testOllamaConnection] And CORS is enabled: OLLAMA_ORIGINS=* ollama serve');
