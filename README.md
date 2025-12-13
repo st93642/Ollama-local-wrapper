@@ -2,6 +2,34 @@
 
 A lightweight, browser-based chat interface for [Ollama](https://ollama.com) models. Open `index.html` directly in your browser—no backend server needed.
 
+## Single-File Bundle
+
+For easy distribution and offline use, a complete bundled version is available at `dist/ollama-wrapper.html` (~350 KB). This file contains:
+
+- All HTML, CSS, and JavaScript inlined (no external dependencies)
+- Bootstrap framework vendored and minified
+- Bootstrap icons converted to inline SVG
+- Manifest data embedded as JSON
+- Works via `file://` protocol—no web server needed
+
+**Usage:** Simply download `dist/ollama-wrapper.html` and open it in your browser. It will work standalone with your local Ollama instance.
+
+### Rebuild the Bundle
+
+To regenerate the bundle after making changes:
+
+```bash
+python3 scripts/bundle_single_file.py
+```
+
+The bundler:
+- Reads source files (`index.html`, `style.css`, `app.js`, `manifest.json`)
+- Vendors Bootstrap CSS/JS from `vendor/` directory
+- Converts icon classes to inline SVGs
+- Minifies CSS and JavaScript
+- Embeds manifest data as JSON for offline model lists
+- Outputs to `dist/ollama-wrapper.html`
+
 ## Features
 
 - 💬 **Chat with local models** - Streaming responses with live token generation
