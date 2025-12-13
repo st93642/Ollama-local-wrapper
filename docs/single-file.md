@@ -7,6 +7,7 @@ This document provides detailed instructions for building, distributing, and usi
 The self-contained bundle (`dist/ollama-wrapper.html`) is a single HTML file that includes all application code, styles, and dependencies inlined. It can be opened directly from the filesystem via the `file://` protocol without requiring a web server.
 
 **Key Benefits:**
+
 - No web server needed
 - Easy to distribute (single ~400 KB file)
 - Works offline once downloaded
@@ -28,30 +29,35 @@ The self-contained bundle (`dist/ollama-wrapper.html`) is a single HTML file tha
 ### Build Steps
 
 1. Navigate to the project root directory:
+
    ```bash
    cd /path/to/ollama-local-wrapper
    ```
 
 2. Run the bundler script:
+
    ```bash
    python3 scripts/bundle_single_file.py
    ```
 
 3. The bundled file will be generated at:
+
    ```
    dist/ollama-wrapper.html
    ```
 
 4. Verify the output:
+
    ```bash
    ls -lh dist/ollama-wrapper.html
    ```
-   
+
    Expected file size: ~400 KB
 
 ### Custom Output Path
 
 To specify a custom output location:
+
 ```bash
 python3 scripts/bundle_single_file.py path/to/custom-output.html
 ```
@@ -59,6 +65,7 @@ python3 scripts/bundle_single_file.py path/to/custom-output.html
 ### What Gets Bundled
 
 The bundler:
+
 - Inlines all CSS (Bootstrap + custom styles, minified)
 - Inlines all JavaScript (Bootstrap + app logic)
 - Converts Bootstrap icon classes to inline SVG elements
@@ -71,6 +78,7 @@ The bundler:
 ### Opening the File
 
 **Method 1: File Browser**
+
 1. Navigate to `dist/` directory
 2. Double-click `ollama-wrapper.html`
 3. Opens in your default browser
@@ -78,11 +86,13 @@ The bundler:
 **Method 2: Command Line**
 
 macOS:
+
 ```bash
 open dist/ollama-wrapper.html
 ```
 
 Linux:
+
 ```bash
 xdg-open dist/ollama-wrapper.html
 # or
@@ -90,11 +100,13 @@ firefox dist/ollama-wrapper.html
 ```
 
 Windows:
+
 ```cmd
 start dist\ollama-wrapper.html
 ```
 
 **Method 3: Drag and Drop**
+
 - Drag `ollama-wrapper.html` into an open browser window
 
 ### Configuring the API Endpoint
@@ -102,6 +114,7 @@ start dist\ollama-wrapper.html
 The bundle defaults to `http://127.0.0.1:11434` (standard Ollama API endpoint). To change this:
 
 **Option 1: UI Settings (Recommended)**
+
 1. Open the bundle in your browser
 2. Look for the **Settings** panel in the left sidebar
 3. Scroll to **API Endpoint**
@@ -112,6 +125,7 @@ The bundle defaults to `http://127.0.0.1:11434` (standard Ollama API endpoint). 
 **Option 2: Browser Console (Advanced)**
 
 Before the app initializes, set the configuration:
+
 ```javascript
 window.OllamaConfig = {
   apiEndpoint: 'http://your-server:11434',
@@ -127,6 +141,7 @@ Refresh the page after setting this configuration.
 **Option 3: Edit the HTML File**
 
 Add a `<script>` tag before the main application JavaScript:
+
 ```html
 <script>
   window.OllamaConfig = {
@@ -136,6 +151,7 @@ Add a `<script>` tag before the main application JavaScript:
 ```
 
 **Resetting to Default:**
+
 - In UI: Click the **Reset** button next to the API Endpoint field
 - Via console: `localStorage.removeItem('ollamaApiEndpoint')`
 
@@ -148,33 +164,39 @@ When using `file://` protocol to access `http://127.0.0.1:11434`, browsers enfor
 **Solution: Configure Ollama to Allow CORS**
 
 **Linux/macOS:**
+
 ```bash
 OLLAMA_ORIGINS="*" ollama serve
 ```
 
 **Windows PowerShell:**
+
 ```powershell
 $env:OLLAMA_ORIGINS="*"
 ollama serve
 ```
 
 **Linux systemd service (persistent):**
+
 ```bash
 sudo systemctl edit ollama.service
 ```
 
 Add:
+
 ```ini
 [Service]
 Environment="OLLAMA_ORIGINS=*"
 ```
 
 Then:
+
 ```bash
 sudo systemctl restart ollama
 ```
 
 **Note:** Setting `OLLAMA_ORIGINS="*"` allows all origins. For production, specify the exact origin:
+
 ```bash
 OLLAMA_ORIGINS="file://" ollama serve
 ```
@@ -182,20 +204,24 @@ OLLAMA_ORIGINS="file://" ollama serve
 ### localStorage Persistence
 
 The bundle uses browser's localStorage for:
+
 - Chat history (last 1000 messages)
 - API endpoint configuration
 - UI preferences (theme, settings)
 - Model selection
 
 **Important:** Each `file://` path is treated as a separate origin:
+
 - `file:///path/to/ollama-wrapper.html` → separate storage
 - `file:///different/path/ollama-wrapper.html` → separate storage
 
 **To share history across locations:**
+
 - Keep the file in the same location
 - Or use a local web server instead of `file://`
 
 **Storage limits:**
+
 - Most browsers: 5-10 MB for localStorage
 - Chat history is automatically limited to 1000 messages
 - Clearing browser data will remove all saved history
@@ -203,21 +229,25 @@ The bundle uses browser's localStorage for:
 ### Browser-Specific Notes
 
 **Chrome/Edge:**
+
 - Works reliably with `file://` protocol
 - localStorage works as expected
 - May show CORS warnings in console (expected)
 
 **Firefox:**
+
 - Works well with `file://` protocol
 - May prompt for permission to access localStorage
 - CORS handling is strict; ensure Ollama is configured correctly
 
 **Safari:**
+
 - Works with `file://` protocol
 - localStorage is supported
 - May have stricter CORS enforcement
 
 **Common Issues:**
+
 - **"Failed to fetch"**: Ensure Ollama is running and CORS is configured
 - **"Network error"**: Check firewall/antivirus isn't blocking connections
 - **History not saving**: Check browser localStorage isn't disabled
@@ -236,6 +266,7 @@ Use this checklist to verify the bundle works correctly before distribution.
 ### Core Functionality Tests
 
 **1. Application Launch**
+
 - [ ] Open `dist/ollama-wrapper.html` in browser
 - [ ] UI loads without errors (check browser console)
 - [ ] Sidebar displays model selector, library, and settings
@@ -243,16 +274,19 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] Theme toggle button works (light/dark mode)
 
 **2. Model Selection**
+
 - [ ] Model dropdown populates with available models
 - [ ] Can select a model from dropdown
 - [ ] Selected model persists after page refresh
 
 **3. API Connection**
+
 - [ ] Status bar shows "Connected" or similar ready state
 - [ ] No CORS errors in browser console
 - [ ] Model library loads cloud models from embedded manifest
 
 **4. Chat Functionality**
+
 - [ ] Type message in text area and press Enter
 - [ ] Message appears in transcript with "user" avatar
 - [ ] Assistant response streams in real-time (tokens appear progressively)
@@ -262,6 +296,7 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] Timestamp shows on messages
 
 **5. Streaming Responses**
+
 - [ ] Response text appears token-by-token (not all at once)
 - [ ] Transcript auto-scrolls as tokens arrive
 - [ ] Stop button works (cancels mid-stream)
@@ -269,6 +304,7 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] No JavaScript errors during streaming
 
 **6. Chat History Persistence**
+
 - [ ] Send 2-3 messages in conversation
 - [ ] Refresh the page (`Ctrl+R` / `Cmd+R`)
 - [ ] All messages reappear in transcript
@@ -279,6 +315,7 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] Refresh page → transcript remains empty (history cleared)
 
 **7. Settings Persistence**
+
 - [ ] Change temperature slider
 - [ ] Change max tokens slider
 - [ ] Update API endpoint
@@ -286,12 +323,14 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] All settings restore to saved values
 
 **8. Model Library**
+
 - [ ] Click "Pull" button on a cloud model
 - [ ] Progress bar shows download progress
 - [ ] Model appears in dropdown when complete
 - [ ] Can select and chat with newly pulled model
 
 **9. Image Support (if vision model available)**
+
 - [ ] Click attach button (📎)
 - [ ] Select an image file
 - [ ] Thumbnail appears below text area
@@ -300,6 +339,7 @@ Use this checklist to verify the bundle works correctly before distribution.
 - [ ] Assistant responds (with vision-capable model)
 
 **10. Error Handling**
+
 - [ ] Stop Ollama service
 - [ ] Try to send a message
 - [ ] Error message displays in UI
@@ -309,12 +349,14 @@ Use this checklist to verify the bundle works correctly before distribution.
 ### Browser Compatibility
 
 Test on multiple browsers:
+
 - [ ] Chrome/Chromium (latest)
 - [ ] Firefox (latest)
 - [ ] Safari (macOS)
 - [ ] Edge (Windows)
 
 For each browser:
+
 - [ ] Bundle loads without errors
 - [ ] Chat functionality works
 - [ ] localStorage persists
@@ -322,11 +364,13 @@ For each browser:
 ### Network Scenarios
 
 **Local Network Access:**
+
 - [ ] Change API endpoint to remote server (e.g., `http://192.168.1.100:11434`)
 - [ ] Verify connection works
 - [ ] Chat functions normally
 
 **Offline Mode:**
+
 - [ ] Open bundle while offline (no internet)
 - [ ] UI loads (no external resources)
 - [ ] LocalStorage works
@@ -351,6 +395,7 @@ ls -lh dist/ollama-wrapper.html
 ### Regression Tests
 
 After any code changes, verify:
+
 - [ ] Bundle rebuilds successfully
 - [ ] All core tests pass (items 1-10 above)
 - [ ] No new console errors
@@ -361,16 +406,19 @@ After any code changes, verify:
 ### Packaging
 
 **Single File:**
+
 - Distribute `dist/ollama-wrapper.html` directly
 - Rename if desired (e.g., `ollama-chat.html`)
 
 **With Instructions:**
 Create a zip archive:
+
 ```bash
 zip -r ollama-wrapper-bundle.zip dist/ollama-wrapper.html README.md
 ```
 
 Or create a release package:
+
 ```
 ollama-wrapper-v1.0/
 ├── ollama-wrapper.html
@@ -383,7 +431,7 @@ ollama-wrapper-v1.0/
 Include these basic steps for end users:
 
 1. **Install Ollama** (if not already installed):
-   - Download from https://ollama.com/download
+   - Download from <https://ollama.com/download>
    - Follow platform-specific instructions
 
 2. **Enable CORS** (required for `file://` access):
@@ -391,6 +439,7 @@ Include these basic steps for end users:
    - Or: `$env:OLLAMA_ORIGINS="*"; ollama serve` (Windows)
 
 3. **Pull a Model**:
+
    ```bash
    ollama pull llama3.2
    ```
@@ -408,6 +457,7 @@ Include these basic steps for end users:
 For wider distribution, host on a web server:
 
 **Static Hosting:**
+
 ```bash
 # Upload to server
 scp dist/ollama-wrapper.html user@server:/var/www/html/
@@ -419,11 +469,13 @@ python3 -m http.server 8000
 ```
 
 **Advantages over `file://`:**
+
 - No CORS configuration needed (if Ollama on same domain)
 - Consistent localStorage behavior
 - Better for multiple users
 
 **Note:** If hosting on web server, you may need to configure CORS differently:
+
 ```bash
 OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 ```
@@ -434,6 +486,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** Blank page, console errors
 **Solutions:**
+
 - Check browser console for errors
 - Verify file isn't corrupted (re-download/rebuild)
 - Try a different browser
@@ -443,6 +496,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** "Access blocked by CORS policy" in console
 **Solutions:**
+
 - Ensure Ollama is started with `OLLAMA_ORIGINS="*"`
 - Restart Ollama after changing environment variable
 - Check firewall isn't blocking port 11434
@@ -452,6 +506,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** Empty model dropdown
 **Solutions:**
+
 - Verify Ollama is running: `curl http://localhost:11434/api/tags`
 - Check API endpoint in Settings (should be `http://127.0.0.1:11434`)
 - Click "Refresh" button
@@ -461,6 +516,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** History clears on page refresh
 **Solutions:**
+
 - Check localStorage is enabled in browser settings
 - Verify not in private/incognito mode
 - Check browser storage quota isn't exceeded
@@ -470,6 +526,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** Full response appears at once
 **Solutions:**
+
 - Check network tab in DevTools for streaming response
 - Verify Ollama version supports streaming (v0.1.0+)
 - Try a different model
@@ -479,6 +536,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 
 **Symptoms:** Bundler script errors
 **Solutions:**
+
 - Verify Python 3.6+ is installed: `python3 --version`
 - Check all source files exist in project directory
 - Ensure `vendor/` directory contains Bootstrap files
@@ -491,6 +549,7 @@ OLLAMA_ORIGINS="http://your-domain.com" ollama serve
 **Modify Default Configuration:**
 
 Edit `scripts/bundle_single_file.py` to change defaults:
+
 ```python
 # Before bundling, inject custom config
 config_injection = '''
@@ -507,6 +566,7 @@ html = html.replace('</head>', f'{config_injection}\n</head>')
 **Remove Unnecessary Features:**
 
 To reduce file size, comment out features in `app.js` before bundling:
+
 - Model library (if not needed)
 - Image support (if not needed)
 - Specific cloud models from manifest
@@ -514,6 +574,7 @@ To reduce file size, comment out features in `app.js` before bundling:
 **Branding:**
 
 Edit `index.html` before bundling:
+
 - Change `<title>` tag
 - Update navbar brand name
 - Add custom logo/favicon
@@ -521,16 +582,19 @@ Edit `index.html` before bundling:
 ### Security Considerations
 
 **When Using `file://` Protocol:**
+
 - ✅ No external resources loaded
 - ✅ All code is local
 - ⚠️ API endpoint must be trusted (usually localhost)
 
 **When Hosting on Web Server:**
+
 - 🔒 Use HTTPS if possible
 - 🔒 Configure CORS to specific origins (not `*`)
 - 🔒 Consider authentication if public-facing
 
 **Data Privacy:**
+
 - Chat history stored in browser localStorage (local only)
 - No data sent to external servers
 - API calls go directly to Ollama instance
@@ -538,16 +602,19 @@ Edit `index.html` before bundling:
 ### Performance Optimization
 
 **For Large Chat Histories:**
+
 - Reduce `maxHistoryMessages` in config
 - Use "Clear chat" periodically
 - Export important conversations
 
 **For Slow Streaming:**
+
 - Increase `chatTimeoutMs` config
 - Check Ollama server performance
 - Consider using smaller models
 
 **For Large File Size:**
+
 - Remove unused cloud models from manifest
 - Minify more aggressively (edit bundler)
 - Use gzip compression on web server
@@ -561,6 +628,7 @@ When updating the bundle:
    - In README: note version changes
 
 2. **Rebuild bundle**:
+
    ```bash
    python3 scripts/bundle_single_file.py
    ```
@@ -568,6 +636,7 @@ When updating the bundle:
 3. **Test with verification checklist** (see above)
 
 4. **Tag release**:
+
    ```bash
    git add dist/ollama-wrapper.html
    git commit -m "Update bundle: <changelog>"
@@ -579,6 +648,7 @@ When updating the bundle:
 ## Support
 
 For issues or questions:
+
 - Check this documentation thoroughly
 - Review browser console for errors
 - Verify Ollama setup and CORS configuration
