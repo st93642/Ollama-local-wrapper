@@ -14,6 +14,8 @@ For easy distribution and offline use, a complete bundled version is available a
 
 **Usage:** Simply download `dist/ollama-wrapper.html` and open it in your browser. It will work standalone with your local Ollama instance.
 
+📖 **[Complete bundle documentation](docs/single-file.md)** - Includes build instructions, configuration options, browser considerations, CORS setup, and verification checklist.
+
 ### Rebuild the Bundle
 
 To regenerate the bundle after making changes:
